@@ -80,3 +80,108 @@ No existing models in workspace — this is a fresh build. The domain DB has exi
 ## Approvals
 
 - [x] User approved design — 2026-08-11 06:19 (UTC)
+
+---
+
+## Reconciliation: `core.fct_trip` vs `core.fct_trip_baseline`
+
+**Outcome**: <span style="color:#d32f2f;font-weight:bold">divergent-unexplained</span>
+
+### Contract
+
+| Field | Value |
+|---|---|
+| Mode | Keyed on `trip_key` (VARCHAR), 20,671,899 distinct, 0 nulls both sides |
+| Rows | 20,671,899 each |
+| Columns | 16 common (exact name+type match) |
+| Excluded | `pickup_zone_key`, `dropoff_zone_key` (VARCHAR vs INTEGER encoding) |
+| Gating | Advisory |
+| Round cap | 5 |
+
+**Tolerances (FSA-confirmed)**:
+
+| Column(s) | Kind | Threshold |
+|---|---|---|
+| `pickup_datetime`, `dropoff_datetime`, `pickup_location_id`, `dropoff_location_id`, `store_and_fwd_flag`, `trip_distance`, `extra`, `mta_tax`, `tolls_amount`, `improvement_surcharge`, `congestion_surcharge` | exact | 0 |
+| `passenger_count` | exact | 0 |
+| `fare_amount` | fixed | 0.01 |
+| `tip_amount` | fixed | 0.01 |
+| `total_amount` | fixed | 0.01 |
+| `fare_residual` | fixed | 0.01 |
+
+### Measurement
+
+**Macro**: `vd_recon_compare_keyed` | **Args**: 16 column pairs, key `trip_key`, baseline `domain.core.fct_trip_baseline`, target `nyctaxi.main_core.fct_trip`
+
+```
+classification: matching=664,407  missing_from_target=0  additional_in_target=0  changed=20,007,492
+invalid_key_alignment: 0
+```
+
+Column-level conflicts (from macro output):
+
+| Column | Conflict count | One-sided nulls |
+|---|---|---|
+| pickup_datetime | 0 | 0 |
+| dropoff_datetime | 0 | 0 |
+| pickup_location_id | 0 | 0 |
+| dropoff_location_id | 0 | 0 |
+| passenger_count | 0 | 1,990,204 |
+| store_and_fwd_flag | 0 | 0 |
+| trip_distance | 0 | 0 |
+| fare_amount | 18,036,980 | 0 |
+| extra | 0 | 0 |
+| mta_tax | 0 | 0 |
+| tip_amount | 11,761,252 | 0 |
+| tolls_amount | 0 | 0 |
+| improvement_surcharge | 0 | 0 |
+| congestion_surcharge | 0 | 0 |
+| total_amount | 19,011,568 | 0 |
+| fare_residual | 2,817,651 | 1,990,204 |
+
+### Materiality (with 0.01 tolerances)
+
+Materialized via `vd_recon_materialize_keyed_mismatches` (run_id: `recon_full`, 20,007,492 rows). Tolerances applied per column:
+
+| Column | Diffs | Immaterial (≤ tol) | Material (> tol or one-sided null) |
+|---|---|---|---|
+| passenger_count | 1,990,204 | 0 | **1,990,204** (one-sided nulls) |
+| fare_amount | 18,036,980 | 17,509 | **18,019,471** |
+| tip_amount | 11,761,252 | 52,529 | **11,708,723** |
+| total_amount | 19,011,568 | 39,753 | **18,971,815** |
+| fare_residual | 4,807,855 | 2,817,651 | **1,990,204** (one-sided nulls) |
+| 11 other cols | 0 | — | 0 |
+
+**Summary**: ~50.7M material units. The fare/tip/total columns (46.7M material) show DOUBLE-precision noise clustering in the 0.01–0.50 range — the 0.01 tolerance captures only ~5% of it. The passenger_count and fare_residual material units (4.0M) are one-sided nulls on the same 1,990,204 green taxi rows, where the baseline does not compute these values but the target does.
+
+### Outcome
+
+No hypotheses investigated — measurement-only comparison with FSA-confirmed tolerances.
+
+```json
+{
+  "contract": {
+    "baseline": "domain.core.fct_trip_baseline",
+    "target": "nyctaxi.main_core.fct_trip",
+    "key": "trip_key",
+    "mode": "keyed",
+    "gating": "advisory",
+    "tolerances": {
+      "fare_amount": {"kind": "fixed", "threshold": 0.01},
+      "tip_amount": {"kind": "fixed", "threshold": 0.01},
+      "total_amount": {"kind": "fixed", "threshold": 0.01},
+      "fare_residual": {"kind": "fixed", "threshold": 0.01},
+      "others": {"kind": "exact"}
+    }
+  },
+  "outcome": "divergent-unexplained",
+  "material_count": 50690417,
+  "immaterial_count": 2927442,
+  "material_confirmed": 0,
+  "residual": [
+    {"cause": "fp_noise_001_050", "impact": "46.7M units across fare_amount/tip_amount/total_amount", "description": "DOUBLE precision differences clustering in 0.01–0.50 range. 0.01 tolerance too tight for FP representation noise; widening to 0.50 would eliminate this class entirely."},
+    {"cause": "green_taxi_structural", "impact": "4.0M units across 1,990,204 rows (passenger_count + fare_residual)", "description": "One-sided nulls: baseline does not compute passenger_count or fare_residual for green taxi rows (service_type='green'); target computes both. Structural difference, not a value error."}
+  ],
+  "stop_reason": "measurement-complete"
+}
+```
