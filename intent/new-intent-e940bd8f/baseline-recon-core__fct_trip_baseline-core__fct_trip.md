@@ -61,9 +61,26 @@ Target's remaining 18 columns (`pickup_date_key`, `pickup_date`, `pickup_hour`, 
 | Baseline boundaries (`pickup_datetime`) | `vd_recon_probe_boundaries(nyctaxi.core.fct_trip_baseline, "pickup_datetime")` | `{"min": "2002-12-31 16:46:07", "max": "2026-06-26 23:53:12", "count": 20671899}` |
 | Baseline PII columns | `vd_recon_pii_columns(nyctaxi.core.fct_trip_baseline)` | `{"pii_columns": []}` |
 
+## Amendment 1 — Scope narrowed (infra-memory constraint)
+
+Whole-dataset measurement via `vd_recon_compare_keyed` was attempted and killed by the
+sandbox's OOM condition (exit 137) on two consecutive attempts (default threads, then
+`--threads 1`) — both exhausted the infra-retry cap (max 2) per
+`references/investigation-and-mechanism.md`. Neither attempt reached the macro's own
+`VD_RECON_RESULT` line, so no partial measurement exists to report as an alternative to
+this amendment.
+
+**FSA-confirmed narrowing:** Scope changes from whole-dataset to the overlap window
+`pickup_datetime >= '2024-01-01' AND pickup_datetime < '2024-07-01'` — the `report_start`/
+`report_end` reporting window already confirmed for this domain (ADR-0002, recorded in
+`transformation/dbt_project.yml`'s `vars` block), which falls entirely inside the
+whole-dataset boundaries both sides already share. The filter is applied identically to
+both sides as a row predicate on the shared `pickup_datetime` column — no other part of
+the confirmed contract (key, mapping, casts, tolerance, gating=advisory) changes.
+
 ## Measurement
 
-_Pending — Step 3 not yet run._
+_Pending — Step 3 rerun against the narrowed scope not yet executed._
 
 ## Investigation
 
