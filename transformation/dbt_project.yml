@@ -1,0 +1,68 @@
+name: 'nyc_taxi_analytics'
+version: '2.1.0'
+config-version: 2
+profile: 'dbt_duckdb_local'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+snapshot-paths: ["snapshots"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # --- Source location indirection -------------------------------------
+  # Production defaults. A cache-backed target overrides only the database,
+  # never the schema, so source() resolution is identical in both places.
+  bronze_database: domain
+  bronze_schema: bronze
+  silver_database: domain
+  silver_schema: silver
+  ops_database: domain
+  ops_schema: ops_raw
+  mdm_database: domain
+  mdm_schema: mdm_raw
+
+  # --- Business rules ---------------------------------------------------
+  # The reporting window Finance agreed (ADR 0002). Changing it changes the
+  # numbers in the Monday revenue pack. This is NOT a sampling control.
+  report_start: '2024-01-01'
+  report_end: '2024-07-01'
+
+  # Trips below this duration or above this speed are physically implausible
+  # and are flagged, not deleted (ADR 0004).
+  max_plausible_mph: 80
+  min_plausible_seconds: 30
+
+models:
+  nyc_taxi_analytics:
+    +persist_docs:
+      relation: true
+      columns: true
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: table
+      +schema: intermediate
+    marts:
+      +materialized: table
+      core:
+        +schema: core
+      agg:
+        +schema: agg
+      finance:
+        +schema: finance
+      ops:
+        +schema: ops
+
+seeds:
+  nyc_taxi_analytics:
+    +schema: seeds
+    +quote_columns: false
+
+snapshots:
+  nyc_taxi_analytics:
+    +target_schema: snapshots

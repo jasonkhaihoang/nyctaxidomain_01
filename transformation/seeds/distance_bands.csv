@@ -1,0 +1,7 @@
+band_order,distance_band,min_miles,max_miles
+1,0 - 1 mi,0,1
+2,1 - 3 mi,1,3
+3,3 - 6 mi,3,6
+4,6 - 12 mi,6,12
+5,12 - 20 mi,12,20
+6,20+ mi,20,9999

@@ -1,0 +1,6 @@
+band_order,fare_band,min_total,max_total
+1,Under $10,0,10
+2,$10 - $25,10,25
+3,$25 - $50,25,50
+4,$50 - $80,50,80
+5,Over $80,80,999999

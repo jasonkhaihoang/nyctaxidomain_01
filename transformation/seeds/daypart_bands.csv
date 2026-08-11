@@ -1,0 +1,25 @@
+hour_of_day,daypart_code,daypart_name,is_peak
+0,LATE,Late night,false
+1,LATE,Late night,false
+2,LATE,Late night,false
+3,LATE,Late night,false
+4,LATE,Late night,false
+5,EARLY,Early morning,false
+6,EARLY,Early morning,true
+7,AMPEAK,Morning peak,true
+8,AMPEAK,Morning peak,true
+9,AMPEAK,Morning peak,true
+10,MID,Midday,false
+11,MID,Midday,false
+12,MID,Midday,false
+13,MID,Midday,false
+14,MID,Midday,false
+15,MID,Midday,false
+16,PMPEAK,Evening peak,true
+17,PMPEAK,Evening peak,true
+18,PMPEAK,Evening peak,true
+19,PMPEAK,Evening peak,true
+20,EVE,Evening,false
+21,EVE,Evening,false
+22,EVE,Evening,false
+23,LATE,Late night,false

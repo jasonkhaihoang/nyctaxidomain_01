@@ -1,0 +1,186 @@
+version: 2
+
+sources:
+  # =====================================================================
+  # TLC trip records. Two layers, both produced by the loader outside this
+  # repo. bronze is verbatim; silver is conformed.
+  # =====================================================================
+  - name: bronze
+    description: >
+      Landed TLC trip records and the zone lookup, verbatim. Source column
+      names and types are preserved exactly as published, including the
+      inconsistent casing (`VendorID`, `Airport_fee`), so that a schema
+      change at TLC shows up here as a change rather than as a silent
+      re-interpretation.
+    database: "{{ var('bronze_database') }}"
+    schema: "{{ var('bronze_schema') }}"
+    loaded_at_field: _loaded_at
+    freshness:
+      warn_after: {count: 36, period: hour}
+      error_after: {count: 72, period: hour}
+    tables:
+      - name: yellow_tripdata
+        description: >
+          Yellow medallion trips. **The only place `Airport_fee` exists** --
+          ADR 0001 drops it when conforming, because green has no equivalent.
+          Anything needing the airport access fee reads this table.
+        columns:
+          - name: VendorID
+            description: Technology provider that submitted the record.
+          - name: tpep_pickup_datetime
+            description: Meter engage time. Yellow's prefix is `tpep`, green's is `lpep`.
+          - name: PULocationID
+            description: TLC pickup zone id.
+          - name: Airport_fee
+            description: >
+              Airport access fee. 1.75 under the current regime, 1.25 on
+              stragglers from the pre-December-2023 regime, negative on
+              reversals, and null where the vendor did not populate it.
+              Summing it without filtering is not a fee total.
+      - name: green_tripdata
+        description: >
+          Green (boro) taxi trips. Carries `ehail_fee` and `trip_type`,
+          which yellow does not, and has no `Airport_fee`.
+      - name: taxi_zone_lookup
+        description: TLC zone reference as published. 265 rows.
+
+  - name: silver
+    description: >
+      Conformed trip layer. Yellow and green unioned onto one grain with
+      shared column names and a `service_type` discriminator. Structure
+      only -- no business filtering, so refunds, zero-distance trips and
+      out-of-window pickups all survive into silver by design.
+    database: "{{ var('silver_database') }}"
+    schema: "{{ var('silver_schema') }}"
+    tables:
+      - name: trips
+        description: >
+          One row per distinct trip across both fleets. The conformed
+          intersection of the two schemas -- deliberately not a complete
+          trip record. See ADR 0001.
+        columns:
+          - name: trip_key
+            description: >
+              md5 over the trip's natural columns. Bronze does not carry it,
+              so reaching back to a fleet-specific bronze column means
+              recomputing this expression identically -- see the
+              `trip_natural_key` macro.
+            tests: [unique, not_null]
+          - name: service_type
+            tests:
+              - accepted_values: {values: ['yellow', 'green']}
+          - name: pickup_location_id
+            description: Joins the zone dimension. TLC never emits an id outside 1-265.
+      - name: zones
+      - name: payment_types
+      - name: rate_codes
+
+  # =====================================================================
+  # Fleet operations. Harbour Point's own dispatch and telematics platform.
+  # This is where driver, vehicle, shift and occupancy identity lives --
+  # none of it exists in the TLC records.
+  # =====================================================================
+  - name: ops_raw
+    description: >
+      Harbour Point Taxi Management's dispatch and telematics platform.
+      Lands nightly. The TLC feed describes the journey; this describes who
+      drove it, in which medallion, on which shift, and what the driver was
+      doing when not carrying a fare.
+    database: "{{ var('ops_database') }}"
+    schema: "{{ var('ops_schema') }}"
+    tables:
+      - name: garage
+        description: Physical depots. Six of them.
+      - name: vehicle
+        description: >
+          Medallion vehicles on the fleet. `retired_date` is populated for
+          vehicles taken out of service mid-period, so a vehicle-level
+          denominator must respect it or utilisation reads low.
+      - name: driver
+        description: >
+          Licensed drivers. `engagement_type` drives the economics:
+          owner-operators take a revenue share, lease drivers pay a fixed
+          daily or weekly rate.
+      - name: lease_agreement
+        description: Commercial terms binding a driver to a primary vehicle.
+      - name: shift
+        description: >
+          One row per driver-vehicle sign-on. `shift_end_ts` is **null for
+          roughly 1.5% of shifts** where the tablet lost power before
+          emitting LOGOUT; `derived_end_ts` is the platform's own estimate.
+          Treating null as zero-length is the classic mistake here.
+        columns:
+          - name: shift_id
+            tests: [unique, not_null]
+      - name: trip_assignment
+        description: >
+          Links a TLC trip to the shift that ran it. The system of record for
+          attribution. A small number are `manual` overrides.
+        columns:
+          - name: trip_key
+            description: Foreign key to silver.trips.trip_key.
+      - name: driver_status_event
+        description: >
+          The occupancy stream. LOGIN, AVAILABLE, DISPATCHED, ON_TRIP, BREAK,
+          LOGOUT. `event_ts` is the platform's assigned time and
+          `received_ts` is arrival -- they differ on ~0.3% of events, enough
+          to invert order against a neighbour, so sessionizing on the wrong
+          one produces negative interval durations.
+        columns:
+          - name: event_id
+            tests: [unique, not_null]
+          - name: status_code
+            tests:
+              - accepted_values:
+                  values: [LOGIN, AVAILABLE, DISPATCHED, ON_TRIP, BREAK, LOGOUT]
+      - name: maintenance_event
+        description: Vehicle downtime. Removes a vehicle from the utilisation denominator.
+
+  # =====================================================================
+  # Master data. Reference entities enriched well beyond the bare TLC code
+  # lists. Two tables are versioned at source with a natural key.
+  # =====================================================================
+  - name: mdm_raw
+    description: >
+      The master-data platform's landing schema. Takes TLC's code-and-label
+      lists and adds the attributes the business actually reasons about --
+      settlement terms, flat-fare amounts, zone geography, contract tiers.
+    database: "{{ var('mdm_database') }}"
+    schema: "{{ var('mdm_schema') }}"
+    tables:
+      - name: zone_master
+        description: >
+          **Versioned at source.** Natural key `location_id`, with
+          `valid_from_date` / `valid_to_date` and `source_version`. Zones
+          that were re-designated carry two rows, so a naive join to this
+          table multiplies trips.
+      - name: vendor_master
+        description: >
+          **Versioned at source.** Natural key `vendor_id`. VendorID 2 has
+          two versions: VeriFone until the July 2023 Curb Mobility rebrand,
+          Curb after. A trip must resolve against the version in force when
+          it happened.
+      - name: payment_method_master
+        description: >
+          Payment methods with settlement class, processor fee and
+          `tip_is_captured` -- the flag that makes a cash trip's zero tip
+          mean "unmeasured" rather than "none given".
+      - name: rate_plan_master
+        description: Rate plans with flat-fare amounts and airport applicability.
+      - name: fare_regime_master
+        description: >
+          Effective-dated surcharge rates. Lets a surcharge variance be
+          explained against the rate in force rather than the current one.
+      - name: borough_master
+        description: Boroughs with reporting region, population and market flags.
+      - name: zone_poi
+        description: >
+          Points of interest per zone. **Many-to-many** -- one zone holds
+          several, one category spans many zones -- so this needs a bridge,
+          not a flattened column.
+      - name: calendar_master
+        description: Dates with federal holidays, NYC events, school term and weekend flags.
+      - name: weather_daily
+        description: >
+          Daily observation per borough. A real demand driver: rain lifts
+          short-hop demand, snow suppresses everything.
