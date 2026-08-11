@@ -1,8 +1,0 @@
-{
-  "command": "rm -f -- vd-domain.yml",
-  "cwd": "/workspace",
-  "timeout": 300,
-  "id": "8a1ad221f37d4a7da5afb08ce3c8024f",
-  "timestamp": "2026-08-11T11:31:34.940417Z",
-  "kind": "BashCommand"
-}

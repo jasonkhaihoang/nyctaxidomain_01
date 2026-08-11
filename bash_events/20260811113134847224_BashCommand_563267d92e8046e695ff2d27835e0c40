@@ -1,8 +1,0 @@
-{
-  "command": "test -e 'transformation/profiles.yml'",
-  "cwd": "/workspace",
-  "timeout": 300,
-  "id": "563267d92e8046e695ff2d27835e0c40",
-  "timestamp": "2026-08-11T11:31:34.847224Z",
-  "kind": "BashCommand"
-}

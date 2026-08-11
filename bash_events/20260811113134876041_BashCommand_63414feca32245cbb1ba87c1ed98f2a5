@@ -1,8 +1,0 @@
-{
-  "command": "mkdir -p ingestion/.dlt",
-  "cwd": "/workspace",
-  "timeout": 300,
-  "id": "63414feca32245cbb1ba87c1ed98f2a5",
-  "timestamp": "2026-08-11T11:31:34.876041Z",
-  "kind": "BashCommand"
-}

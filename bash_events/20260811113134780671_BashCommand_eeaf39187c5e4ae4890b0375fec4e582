@@ -1,8 +1,0 @@
-{
-  "command": "test -e '.gitattributes'",
-  "cwd": "/workspace",
-  "timeout": 300,
-  "id": "eeaf39187c5e4ae4890b0375fec4e582",
-  "timestamp": "2026-08-11T11:31:34.780671Z",
-  "kind": "BashCommand"
-}

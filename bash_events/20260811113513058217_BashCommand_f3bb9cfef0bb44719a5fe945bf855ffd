@@ -1,8 +1,0 @@
-{
-  "command": "find /workspace -type f -not -path '*/.git/*' -printf '%P\\n'",
-  "cwd": "/workspace",
-  "timeout": 300,
-  "id": "f3bb9cfef0bb44719a5fe945bf855ffd",
-  "timestamp": "2026-08-11T11:35:13.058217Z",
-  "kind": "BashCommand"
-}

@@ -1,8 +1,0 @@
-{
-  "command": "test -e 'CLAUDE.md'",
-  "cwd": "/workspace",
-  "timeout": 300,
-  "id": "f7316129a7034cf3bbd205ec89f077c7",
-  "timestamp": "2026-08-11T11:31:34.747282Z",
-  "kind": "BashCommand"
-}
