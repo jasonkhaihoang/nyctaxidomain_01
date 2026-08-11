@@ -1,0 +1,8 @@
+{
+  "command": "test -e 'docs/adr/.gitkeep'",
+  "cwd": "/workspace",
+  "timeout": 300,
+  "id": "201b5615cc07413abded7ab34fe9d12a",
+  "timestamp": "2026-08-11T11:31:34.841400Z",
+  "kind": "BashCommand"
+}

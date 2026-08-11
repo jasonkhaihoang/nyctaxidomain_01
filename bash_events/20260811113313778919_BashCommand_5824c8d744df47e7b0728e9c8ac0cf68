@@ -1,0 +1,8 @@
+{
+  "command": "set -euo pipefail\nset +x\numask 077\nmkdir -p /run/vd\nrm -f /run/vd/credential.next",
+  "cwd": "/workspace",
+  "timeout": 300,
+  "id": "5824c8d744df47e7b0728e9c8ac0cf68",
+  "timestamp": "2026-08-11T11:33:13.778919Z",
+  "kind": "BashCommand"
+}

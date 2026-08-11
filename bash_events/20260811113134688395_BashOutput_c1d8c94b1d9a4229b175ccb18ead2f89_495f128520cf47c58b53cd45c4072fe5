@@ -1,0 +1,10 @@
+{
+  "id": "495f128520cf47c58b53cd45c4072fe5",
+  "timestamp": "2026-08-11T11:31:34.688395Z",
+  "command_id": "c1d8c94b1d9a4229b175ccb18ead2f89",
+  "order": 0,
+  "exit_code": 0,
+  "stdout": "intent/new-intent-e940bd8f\n",
+  "stderr": null,
+  "kind": "BashOutput"
+}

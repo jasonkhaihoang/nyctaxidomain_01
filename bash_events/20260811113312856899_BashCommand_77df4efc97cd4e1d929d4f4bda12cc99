@@ -1,0 +1,8 @@
+{
+  "command": "set -euo pipefail\nset +x\numask 077\ntest -s /run/vd/credential.next\nchmod 600 /run/vd/credential.next\nmv /run/vd/credential.next /run/vd/credential\nunset VD_INTENT_ACCESS_TOKEN",
+  "cwd": "/workspace",
+  "timeout": 300,
+  "id": "77df4efc97cd4e1d929d4f4bda12cc99",
+  "timestamp": "2026-08-11T11:33:12.856899Z",
+  "kind": "BashCommand"
+}

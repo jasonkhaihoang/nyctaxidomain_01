@@ -1,0 +1,8 @@
+{
+  "command": "git rev-list --count \"origin/$(git branch --show-current)..HEAD\"",
+  "cwd": "/workspace",
+  "timeout": 300,
+  "id": "785967040664474a8b60d6105111e6dd",
+  "timestamp": "2026-08-11T11:31:34.985243Z",
+  "kind": "BashCommand"
+}

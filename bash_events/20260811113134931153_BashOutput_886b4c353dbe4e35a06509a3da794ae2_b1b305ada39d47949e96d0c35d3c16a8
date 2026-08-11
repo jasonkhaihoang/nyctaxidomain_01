@@ -1,0 +1,10 @@
+{
+  "id": "b1b305ada39d47949e96d0c35d3c16a8",
+  "timestamp": "2026-08-11T11:31:34.931153Z",
+  "command_id": "886b4c353dbe4e35a06509a3da794ae2",
+  "order": 0,
+  "exit_code": 1,
+  "stdout": null,
+  "stderr": "error: pathspec 'vd-domain.yml' did not match any file(s) known to git\nDid you forget to 'git add'?\n",
+  "kind": "BashOutput"
+}

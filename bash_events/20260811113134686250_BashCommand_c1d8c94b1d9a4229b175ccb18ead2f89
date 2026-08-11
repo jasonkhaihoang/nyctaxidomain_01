@@ -1,0 +1,8 @@
+{
+  "command": "git rev-parse --abbrev-ref HEAD",
+  "cwd": "/workspace",
+  "timeout": 300,
+  "id": "c1d8c94b1d9a4229b175ccb18ead2f89",
+  "timestamp": "2026-08-11T11:31:34.686250Z",
+  "kind": "BashCommand"
+}
