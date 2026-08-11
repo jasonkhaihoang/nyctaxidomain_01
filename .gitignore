@@ -1,0 +1,29 @@
+# dbt build artifacts
+**/target/
+dbt_packages/
+logs/
+*.log
+
+# Python
+*.pyc
+__pycache__/
+.venv/
+venv/
+.env
+
+# Spark / Livy
+.livy-session-id.txt
+
+# IDE
+.vscode/
+.idea/
+
+# VD Studio
+.claude/
+intent-state.json
+
+# Local data / runtime outputs
+data/
+
+# VD Studio — operator secret store symlink (VD-3409); resolves outside the repo, never commit
+ingestion/.dlt/secrets.toml
