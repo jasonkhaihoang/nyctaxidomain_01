@@ -92,7 +92,27 @@ contract changes.
 
 ## Measurement
 
-_Pending — Step 3 rerun against the Amendment 2 scope not yet executed._
+Scope: Amendment 2 (`pickup_datetime >= '2024-01-01' AND pickup_datetime < '2024-02-01'`).
+
+`vd_recon_compare_keyed(baseline_relation, target_relation, ["trip_key"], column_pairs)`
+(run with `--threads 1`; the target relation subquery folds the `payment_method_key`
+cast so the macro's literal `t.<target_column>` templating stays a bare column reference):
+
+```json
+{"row_count": {"baseline": 3021172, "target": 3021172}, "key_count": {"baseline": 3021172, "target": 3021172}, "classification": {"matching": 7735, "missing_from_target": 0, "additional_in_target": 0, "changed": 3013437}, "invalid_key_alignment": 0, "column_conflicts": [{"column": "pickup_zone_key", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "dropoff_zone_key", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "payment_method_key", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "rate_plan_key", "conflict_count": 0, "one_sided_null_count": 143577}, {"column": "pickup_datetime", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "dropoff_datetime", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "pickup_location_id", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "dropoff_location_id", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "passenger_count", "conflict_count": 0, "one_sided_null_count": 143577}, {"column": "store_and_fwd_flag", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "trip_distance", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "fare_amount", "conflict_count": 2628323, "one_sided_null_count": 0}, {"column": "extra", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "mta_tax", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "tip_amount", "conflict_count": 1821428, "one_sided_null_count": 0}, {"column": "tolls_amount", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "improvement_surcharge", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "congestion_surcharge", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "total_amount", "conflict_count": 2775302, "one_sided_null_count": 0}, {"column": "fare_residual", "conflict_count": 2622167, "one_sided_null_count": 0}, {"column": "is_billable", "conflict_count": 2429, "one_sided_null_count": 0}]}
+```
+
+Summary:
+
+- Row/key counts match exactly on both sides (3,021,172).
+- No `missing_from_target`, `additional_in_target`, or `invalid_key_alignment`.
+- 7,735 rows fully `matching`; 3,013,437 rows (~99.7%) `changed`.
+- Conflict drivers: `total_amount` (2,775,302), `fare_amount` (2,628,323), `fare_residual`
+  (2,622,167), `tip_amount` (1,821,428), `is_billable` (2,429).
+- One-sided nulls only on `rate_plan_key` and `passenger_count` (143,577 each, same count
+  — suggests one join-survival/null-handling mechanism affecting both together, not two
+  independent ones).
+- All zone/date/location/flag columns show zero conflicts.
 
 ## Investigation
 
