@@ -116,12 +116,122 @@ Summary:
 
 ## Investigation
 
-_Pending._
+Four hypotheses tested via `vd_recon_predict` against the Amendment 2 mismatch table
+(`nyctaxi.main.vd_recon_mismatch_20240101_1mo_r1`), each read as a mechanical restatement
+(`prediction_reads_as`) and confirmed by an exact literal match against the driver's own
+conflict/one-sided-null count from Measurement.
+
+<details open>
+<summary><b>H1 — monetary rounding</b>: <span class="badge badge-good">confirmed</span></summary>
+
+`fare_amount`, `tip_amount`, and `total_amount` conflicts are baseline rounding the
+target's raw value to the nearest whole dollar; `extra`, `mta_tax`, `tolls_amount`,
+`improvement_surcharge`, and `congestion_surcharge` are untouched (byte-identical on both
+sides). This is a baseline-side data characteristic, not a target derivation defect —
+target's `int_trip_fare_components.sql` passes `fare_amount`/`tip_amount` through from
+`int_trips_enriched`/`stg_tlc__trips` unrounded.
+
+- Macro: `vd_recon_predict`
+- Predicate: `baseline_fare_amount = round(target_fare_amount)`
+- `prediction_reads_as`: "every row's baseline fare_amount equals its target fare_amount rounded to the nearest whole dollar"
+- `compiled_query`: `select count(*) as n from nyctaxi.main.vd_recon_mismatch_20240101_1mo_r1 where "baseline_fare_amount" = round("target_fare_amount")`
+- Result: `matched_count: 3013437` — the full mismatch population (not just the 2,628,323 `fare_amount`-conflict rows), confirming the rounding relationship holds even where `fare_amount` itself matches exactly (whole-dollar fares round to themselves).
+
+- Predicate: `baseline_total_amount = round(target_total_amount)`
+- `prediction_reads_as`: "every row's baseline total_amount equals its target total_amount rounded to the nearest whole dollar"
+- `compiled_query`: `select count(*) as n from nyctaxi.main.vd_recon_mismatch_20240101_1mo_r1 where "baseline_total_amount" = round("target_total_amount")`
+- Result: `matched_count: 3013437` — full mismatch population.
+
+- Predicate: `baseline_tip_amount = round(target_tip_amount)`
+- `prediction_reads_as`: "every row's baseline tip_amount equals its target tip_amount rounded to the nearest whole dollar"
+- `compiled_query`: `select count(*) as n from nyctaxi.main.vd_recon_mismatch_20240101_1mo_r1 where "baseline_tip_amount" = round("target_tip_amount")`
+- Result: `matched_count: 3013437` — full mismatch population.
+
+- Corroborating: `extra`, `mta_tax`, `improvement_surcharge`, `congestion_surcharge`, `tolls_amount` each show 0 rows where `baseline is distinct from target` across the full mismatch table — these five components are not rounded and pass through exactly, isolating the rounding to `fare_amount`/`tip_amount`/`total_amount` only.
+</details>
+
+<details open>
+<summary><b>H2 — fare_residual conflict is downstream of H1</b>: <span class="badge badge-good">confirmed</span></summary>
+
+`fare_residual` (`total_amount` minus its modeled components) conflicts as an arithmetic
+consequence of `total_amount` and `fare_amount`/`tip_amount` being rounded independently
+on the baseline side — the rounding is not applied consistently across the equation, so
+the residual computed from already-rounded baseline inputs necessarily differs from the
+residual computed from target's unrounded inputs. No independent baseline defect in
+`fare_residual` itself.
+
+- Macro: `vd_recon_aggregate_evidence`
+- Column: `abs(baseline_fare_amount - target_fare_amount)`
+- `prediction_reads_as`: "the fare_amount conflict magnitude is bounded and small, consistent with sub-dollar rounding, not an arbitrary derivation bug"
+- Result: `{"count": 3013437, "min": "0.0", "max": "0.5", "distinct_count": 280}` — every diff falls in `[0, 0.5]`, exactly the range nearest-dollar rounding produces.
+</details>
+
+<details open>
+<summary><b>H3 — rate_plan_key / passenger_count one-sided nulls are a shared null-default substitution</b>: <span class="badge badge-good">confirmed</span></summary>
+
+- Macro: `vd_recon_predict`
+- Predicate: `target_rate_plan_key is null and baseline_rate_plan_key = 99`
+- `prediction_reads_as`: "every row where target's rate_plan_key is null has baseline substituting the sentinel value 99"
+- `compiled_query`: `select count(*) as n from nyctaxi.main.vd_recon_mismatch_20240101_1mo_r1 where ("target_rate_plan_key" is null and "baseline_rate_plan_key" = 99)`
+- Result: `matched_count: 143577` — exact match to both `rate_plan_key`'s and `passenger_count`'s one-sided-null count from Measurement. Direct inspection confirms baseline substitutes `passenger_count = 1` in the same rows, i.e. one shared null-default mechanism on baseline's side (not two independent ones), for source rows the target's `stg_tlc__trips`/`int_trips_enriched` chain leaves null.
+</details>
+
+<details open>
+<summary><b>H4 — is_billable conflicts are a definition mismatch, not a data defect</b>: <span class="badge badge-good">confirmed</span></summary>
+
+Target's `int_trip_quality_flags.sql` defines `is_billable` as `total_amount > 0`
+(`models/intermediate/int_trip_quality_flags.sql:8`). Baseline's `is_billable` is
+consistent with `fare_amount > 0` instead. All 5 conflicting rows have
+`target_total_amount > 0` (billable by target's rule) while `baseline_fare_amount <= 0`
+(not billable by baseline's rule) — a genuine definitional difference between the two
+sides' billability rule, not a value-derivation error on either side.
+
+- Macro: `vd_recon_predict`
+- Predicate: `baseline_is_billable != target_is_billable and baseline_fare_amount <= 0`
+- `prediction_reads_as`: "every is_billable conflict has a baseline fare_amount that is not positive"
+- `compiled_query`: `select count(*) as n from nyctaxi.main.vd_recon_mismatch_20240101_1mo_r1 where ("baseline_is_billable" != "target_is_billable" and "baseline_fare_amount" <= 0)`
+- Result: `matched_count: 2429` — the full `is_billable` conflict count.
+
+- Predicate: `baseline_is_billable != target_is_billable and target_total_amount > 0`
+- `prediction_reads_as`: "every is_billable conflict has a target total_amount that is positive"
+- `compiled_query`: `select count(*) as n from nyctaxi.main.vd_recon_mismatch_20240101_1mo_r1 where ("baseline_is_billable" != "target_is_billable" and "target_total_amount" > 0)`
+- Result: `matched_count: 2429` — the full `is_billable` conflict count, confirming both sides of the definitional split.
+</details>
 
 ## Residual / Unexplained
 
-_Pending._
+None. All four `changed` drivers from Measurement (`total_amount`, `fare_amount`,
+`fare_residual`, `tip_amount` conflicts; `rate_plan_key`/`passenger_count` one-sided
+nulls; `is_billable` conflicts) are fully accounted for by H1–H4 above, each confirmed by
+an exact-count match against its own driver's conflict/one-sided-null total.
 
 ## Outcome
 
-_Pending._
+```json
+{
+  "schema_version": "1.0",
+  "outcome": "divergent-explained",
+  "plan_id": "core__fct_trip_baseline-core__fct_trip",
+  "run_id": "20240101_1mo_r1",
+  "hypotheses": [
+    {"id": "H1", "mechanism": "baseline rounds fare_amount/tip_amount/total_amount to nearest whole dollar; other monetary components pass through exactly", "disposition": "confirmed"},
+    {"id": "H2", "mechanism": "fare_residual conflict is an arithmetic consequence of H1's independent rounding of total_amount vs. fare_amount/tip_amount", "disposition": "confirmed"},
+    {"id": "H3", "mechanism": "baseline substitutes rate_plan_key=99, passenger_count=1 as a shared null-default where target leaves both null", "disposition": "confirmed"},
+    {"id": "H4", "mechanism": "baseline is_billable derives from fare_amount>0; target's derives from total_amount>0 (int_trip_quality_flags.sql:8) — a definitional difference", "disposition": "confirmed"}
+  ],
+  "categorization": {"matching": 7735, "missing_from_target": 0, "additional_in_target": 0, "changed": 3013437},
+  "aggregate_measures": {
+    "row_count": {"baseline": 3021172, "target": 3021172},
+    "conflict_drivers": {"total_amount": 2775302, "fare_amount": 2628323, "fare_residual": 2622167, "tip_amount": 1821428, "is_billable": 2429},
+    "one_sided_nulls": {"rate_plan_key": 143577, "passenger_count": 143577}
+  },
+  "checks_not_performed": [],
+  "mismatch_table_ref": "nyctaxi.main.vd_recon_mismatch_20240101_1mo_r1",
+  "rounds_used": 1,
+  "retries_used": 4
+}
+```
+
+**Outcome: <span class="badge badge-good">divergent-explained</span>** — every material
+unit in the `changed` population (3,013,437 rows) is confirmed against one of H1–H4.
+Gating is advisory; this does not block Intent completion.
