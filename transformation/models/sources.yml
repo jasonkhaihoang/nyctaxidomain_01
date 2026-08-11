@@ -1,0 +1,94 @@
+version: 2
+
+sources:
+  - name: silver
+    database: domain
+    schema: silver
+    tables:
+      - name: trips
+        description: "NYC taxi trip records (yellow + green), 2024 H1"
+        columns:
+          - name: trip_key
+            description: "Surrogate key"
+            tests:
+              - unique
+              - not_null
+          - name: vendor_id
+            description: "TPEP vendor identifier (1=Creative Mobile Technologies, 2=VeriFone)"
+          - name: pickup_datetime
+            description: "Trip start timestamp"
+          - name: dropoff_datetime
+            description: "Trip end timestamp"
+          - name: passenger_count
+            description: "Reported passenger count"
+          - name: trip_distance
+            description: "Trip distance in miles"
+          - name: rate_code_id
+            description: "Rate code (1=Standard, 2=JFK, 3=Newark, 4=Nassau/Westchester, 5=Negotiated, 6=Group, 99=Unknown)"
+          - name: store_and_fwd_flag
+            description: "Store-and-forward flag (Y/N)"
+          - name: pickup_location_id
+            description: "TLC taxi zone lookup ID for pickup"
+          - name: dropoff_location_id
+            description: "TLC taxi zone lookup ID for dropoff"
+          - name: payment_type
+            description: "Payment type code"
+          - name: fare_amount
+            description: "Time-and-distance fare"
+          - name: extra
+            description: "Miscellaneous extras and surcharges"
+          - name: mta_tax
+            description: "MTA tax"
+          - name: tip_amount
+            description: "Tip amount"
+          - name: tolls_amount
+            description: "Tolls amount"
+          - name: improvement_surcharge
+            description: "Improvement surcharge"
+          - name: congestion_surcharge
+            description: "Congestion surcharge"
+          - name: total_amount
+            description: "Total charged amount"
+          - name: service_type
+            description: "yellow or green"
+          - name: _load_id
+            description: "Ingestion load identifier"
+          - name: _source_file
+            description: "Source parquet file name"
+
+      - name: zones
+        description: "TLC taxi zone lookup (265 zones)"
+        columns:
+          - name: location_id
+            description: "TLC zone location ID"
+            tests:
+              - unique
+              - not_null
+          - name: borough
+            description: "NYC borough name"
+          - name: zone_name
+            description: "Zone name"
+          - name: service_zone
+            description: "TLC service zone classification"
+
+      - name: payment_types
+        description: "Payment type lookup"
+        columns:
+          - name: payment_type
+            description: "Payment type code"
+            tests:
+              - unique
+              - not_null
+          - name: payment_type_desc
+            description: "Payment type description"
+
+      - name: rate_codes
+        description: "Rate code lookup"
+        columns:
+          - name: rate_code_id
+            description: "Rate code identifier"
+            tests:
+              - unique
+              - not_null
+          - name: rate_code_desc
+            description: "Rate code description"

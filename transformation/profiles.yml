@@ -1,0 +1,11 @@
+nyc_taxi:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('VD_EPHM_DUCKDB_PATH') }}"
+      attach:
+        - path: "/Users/jasonkhaihoang/Documents/github/studio/data/duckdb/nyctaxi.duckdb"
+          alias: domain
+          read_only: true
+      threads: 4
