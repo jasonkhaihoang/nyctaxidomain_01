@@ -78,9 +78,21 @@ whole-dataset boundaries both sides already share. The filter is applied identic
 both sides as a row predicate on the shared `pickup_datetime` column — no other part of
 the confirmed contract (key, mapping, casts, tolerance, gating=advisory) changes.
 
+## Amendment 2 — Scope narrowed further (persistent OOM at 6-month window)
+
+`vd_recon_compare_keyed` against the Amendment 1 scope (`2024-01-01` to `2024-07-01`,
+~6 months) was retried twice more (`--threads 1`, both with and without the payment
+method cast folded into the relation subquery) and was killed by OOM (exit 137) both
+times — exhausting the infra-retry cap again.
+
+**FSA-confirmed further narrowing:** Scope changes from the Amendment 1 window to
+`pickup_datetime >= '2024-01-01' AND pickup_datetime < '2024-02-01'` (1 calendar month,
+the first month of the ADR-0002 reporting window). No other part of the confirmed
+contract changes.
+
 ## Measurement
 
-_Pending — Step 3 rerun against the narrowed scope not yet executed._
+_Pending — Step 3 rerun against the Amendment 2 scope not yet executed._
 
 ## Investigation
 
