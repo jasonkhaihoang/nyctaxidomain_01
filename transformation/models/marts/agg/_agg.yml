@@ -1,0 +1,72 @@
+version: 2
+
+models:
+  - name: agg_trip_zone_daypart_dow
+    description: >
+      The demand cube: pickup zone x daypart x day-of-week x fleet. The grain
+      most operational questions land on. Tip metrics are restricted to payment
+      methods where the meter captures tips, and the covered share is published
+      alongside so the reader can see how much traffic the rate speaks for.
+    columns:
+      - name: avg_measurable_tip_rate
+        description: '{{ doc("measurable_tip_rate") }}'
+      - name: trip_count
+        tests: [not_null]
+
+  - name: agg_trip_zone_daily
+    description: >
+      Daily zone demand with period-over-period context. The window functions are
+      the point: a raw count answers "how many", the lag and rolling average
+      answer "is that normal".
+
+  - name: agg_od_flow_matrix
+    description: >
+      Origin-to-destination flow -- the same zone dimension joined twice, in both
+      roles. Bounded to pairs with at least 25 trips; the full 265x265 product is
+      mostly ones and twos, and publishing it invites reading noise as a route.
+
+  - name: agg_trip_band_profile
+    description: >
+      Distance, duration and fare banding in one profile. Three independent range
+      joins with half-open bands, so a trip of exactly three miles lands in
+      "3 - 6" once rather than in two bands or none.
+
+  - name: agg_weather_demand_daily
+    description: Demand against weather, by borough and day.
+
+  - name: agg_driver_daily
+    description: >
+      Driver-day, the base of the driver pyramid. Rates are rebuilt from summed
+      numerators and denominators, never averaged from shift rates -- the mean of
+      two ratios is not the ratio anyone asked for.
+    columns:
+      - name: occupancy_rate
+        description: '{{ doc("occupancy_rate") }}'
+
+  - name: agg_driver_monthly
+    description: >
+      Driver-month, built from driver-day rather than from shifts again. Each
+      level is built from the one below so the pyramid cannot disagree with
+      itself.
+
+  - name: agg_vehicle_daily
+    description: >
+      Vehicle-day. The asset view of the same shifts. Asset utilisation is taken
+      against the 24-hour day, not against sign-on time -- a medallion idle in the
+      depot is the asset question, a driver idle on the road is the labour
+      question, and they are different numbers.
+
+  - name: agg_vehicle_monthly
+    description: >
+      Vehicle-month with maintenance downtime netted out of the denominator. A
+      vehicle in the shop for six days has 24 fewer available days, and charging
+      it with those days makes a well-run asset look idle.
+
+  - name: agg_garage_monthly
+    description: Garage-month. The level depot managers are measured on.
+
+  - name: agg_zone_occupancy_hourly
+    description: >
+      Where the fleet spends its time, by zone and hour, from the status stream
+      rather than from trips. The gap between this map and the revenue map is the
+      whole reason occupancy is collected.

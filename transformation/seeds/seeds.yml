@@ -1,0 +1,31 @@
+version: 2
+
+seeds:
+  - name: daypart_bands
+    description: >
+      Hour-of-day to daypart mapping. Analyst-owned banding, not master data --
+      it encodes how this business chooses to talk about the day, and changing it
+      restates every time-of-day report.
+    columns:
+      - name: hour_of_day
+        tests: [unique, not_null]
+      - name: daypart_code
+        tests: [not_null]
+
+  - name: distance_bands
+    description: Trip distance banding used by every distance-profile aggregate.
+    columns:
+      - name: band_order
+        tests: [unique, not_null]
+
+  - name: duration_bands
+    description: Trip duration banding, in minutes.
+    columns:
+      - name: band_order
+        tests: [unique, not_null]
+
+  - name: fare_bands
+    description: Trip total banding, in dollars.
+    columns:
+      - name: band_order
+        tests: [unique, not_null]

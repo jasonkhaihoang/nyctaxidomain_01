@@ -1,0 +1,180 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: Date spine with holiday, weekend and school-term flags from master data.
+    columns:
+      - name: date_key
+        tests: [unique, not_null]
+      - name: calendar_date
+        tests: [unique, not_null]
+
+  - name: dim_daypart
+    columns:
+      - name: hour_of_day
+        tests: [unique, not_null]
+
+  - name: dim_zone
+    description: |
+      Type 2 zone dimension, natural key `location_id`.
+      {{ doc("scd2_asof") }}
+    columns:
+      - name: zone_key
+        description: Surrogate key over natural key plus valid-from date.
+        tests: [unique, not_null]
+      - name: zone_natural_key
+        tests: [not_null]
+      - name: is_current_version
+        tests: [not_null]
+      - name: borough_name
+        tests:
+          - accepted_values:
+              values: ['Manhattan','Brooklyn','Queens','Bronx','Staten Island','EWR','Unknown','N/A']
+
+  - name: dim_vendor
+    description: |
+      Type 2 vendor dimension, natural key `vendor_id`. VendorID 2 carries two
+      versions across the July 2023 Curb Mobility rebrand.
+      {{ doc("scd2_asof") }}
+    columns:
+      - name: vendor_key
+        tests: [unique, not_null]
+      - name: vendor_natural_key
+        tests: [not_null]
+
+  - name: dim_payment_method
+    columns:
+      - name: payment_method_key
+        tests: [unique, not_null]
+      - name: tip_is_captured
+        description: '{{ doc("measurable_tip_rate") }}'
+        tests: [not_null]
+
+  - name: dim_rate_plan
+    columns:
+      - name: rate_plan_key
+        tests: [unique, not_null]
+
+  - name: dim_service_type
+    columns:
+      - name: service_type_key
+        tests: [unique, not_null]
+
+  - name: dim_fare_regime
+    description: Effective-dated surcharge rates, joined on component and date.
+    columns:
+      - name: fare_regime_key
+        tests: [unique, not_null]
+
+  - name: dim_driver
+    description: >
+      Type 1. Drivers change garage and status but the operator keeps no history,
+      so claiming Type 2 here would be a dimension whose history is fabricated.
+    columns:
+      - name: driver_key
+        tests: [unique, not_null]
+      - name: garage_key
+        tests:
+          - relationships: {to: ref('dim_garage'), field: garage_key}
+
+  - name: dim_vehicle
+    description: Type 1, with maintenance downtime folded in.
+    columns:
+      - name: vehicle_key
+        tests: [unique, not_null]
+      - name: medallion_number
+        tests: [not_null]
+
+  - name: dim_garage
+    columns:
+      - name: garage_key
+        tests: [unique, not_null]
+
+  - name: dim_trip_quality
+    description: >
+      Junk dimension over the observed combinations of the trip quality verdicts.
+      Only combinations that occur are materialised; the full cross product would
+      be 4096 rows, almost all empty.
+    columns:
+      - name: trip_quality_key
+        tests: [unique, not_null]
+
+  - name: bridge_zone_poi
+    description: >
+      Bridge for the zone-to-POI many-to-many. Any join through it multiplies
+      rows by design, which is why it is a separate object and carries an
+      allocation factor.
+    columns:
+      - name: poi_id
+        tests: [unique, not_null]
+
+  - name: fct_trip
+    description: |
+      One row per TLC trip. The grain of the warehouse.
+
+      {{ doc("fleet_attribution") }}
+    columns:
+      - name: trip_key
+        description: '{{ doc("trip_key") }}'
+        tests: [unique, not_null]
+      - name: pickup_zone_key
+        description: Role-playing zone key, resolved as of the trip's own date.
+        tests:
+          - relationships: {to: ref('dim_zone'), field: zone_key}
+      - name: dropoff_zone_key
+        description: The same dimension in its destination role.
+        tests:
+          - relationships: {to: ref('dim_zone'), field: zone_key}
+      - name: vendor_key
+        tests:
+          - relationships: {to: ref('dim_vendor'), field: vendor_key}
+      - name: trip_quality_key
+        tests:
+          - relationships: {to: ref('dim_trip_quality'), field: trip_quality_key}
+      - name: payment_method_key
+        tests:
+          - relationships: {to: ref('dim_payment_method'), field: payment_method_key}
+      - name: is_fleet_attributed
+        description: '{{ doc("fleet_attribution") }}'
+        tests: [not_null]
+      - name: fare_residual
+        description: '{{ doc("fare_residual") }}'
+      - name: airport_fee
+        description: >
+          Yellow only, rejoined from bronze. Null for every green trip by
+          construction -- see airport_fee_status before aggregating it.
+
+  - name: fct_shift
+    description: The bridge between the operational world and the revenue world.
+    columns:
+      - name: shift_id
+        tests: [unique, not_null]
+      - name: driver_key
+        tests:
+          - relationships: {to: ref('dim_driver'), field: driver_key}
+      - name: vehicle_key
+        tests:
+          - relationships: {to: ref('dim_vehicle'), field: vehicle_key}
+      - name: occupancy_rate
+        description: '{{ doc("occupancy_rate") }}'
+
+  - name: fct_status_interval
+    description: >
+      One row per driver state interval. The only place idle time is locatable --
+      a trip says where a driver earned, this says where they waited.
+    columns:
+      - name: interval_id
+        tests: [unique, not_null]
+      - name: status_code
+        tests:
+          - accepted_values:
+              values: [LOGIN, AVAILABLE, DISPATCHED, ON_TRIP, BREAK, LOGOUT]
+
+  - name: fct_maintenance
+    description: >
+      Semi-additive. Down-days sum across vehicles but not across overlapping
+      ranges, so availability must expand this to a daily grain rather than
+      summing the column.
+    columns:
+      - name: maintenance_id
+        tests: [unique, not_null]

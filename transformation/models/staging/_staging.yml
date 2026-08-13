@@ -1,0 +1,124 @@
+version: 2
+
+models:
+  - name: stg_tlc__trips
+    description: >
+      Conformed trips with the derived measures every downstream model would
+      otherwise recompute. No filtering -- silver's completeness is deliberate.
+    columns:
+      - name: trip_key
+        description: '{{ doc("trip_key") }}'
+        tests: [unique, not_null]
+      - name: service_type
+        tests:
+          - accepted_values: {values: ['yellow', 'green']}
+      - name: trip_seconds
+        description: Dropoff minus pickup. Negative on a handful of malformed records.
+
+  - name: stg_tlc__yellow_trip_extras
+    description: >
+      Yellow-only columns ADR 0001 dropped when conforming, keyed back to the
+      trip. Deduplicated to one row per natural key so the rejoin cannot
+      multiply the fact.
+    columns:
+      - name: trip_key
+        tests: [unique, not_null]
+      - name: airport_fee
+        description: >
+          Airport access fee as published. Dirty by nature: 1.75 current, 1.25
+          pre-December-2023 stragglers, negative on reversals, null where the
+          vendor did not populate it.
+
+  - name: stg_tlc__green_trip_extras
+    description: Green-only columns, same reconstruction and dedup rule as yellow.
+    columns:
+      - name: trip_key
+        tests: [unique, not_null]
+
+  - name: stg_mdm__zones
+    description: Zone master, kept versioned. Collapsing to current is the dimension's job.
+  - name: stg_mdm__vendors
+    description: Vendor master, kept versioned.
+  - name: stg_mdm__payment_methods
+    columns:
+      - name: payment_type
+        tests: [unique, not_null]
+  - name: stg_mdm__rate_plans
+    columns:
+      - name: rate_code_id
+        tests: [unique, not_null]
+  - name: stg_mdm__fare_regimes
+  - name: stg_mdm__boroughs
+    columns:
+      - name: borough_name
+        tests: [unique, not_null]
+  - name: stg_mdm__zone_poi
+    description: Many-to-many zone to point-of-interest.
+    columns:
+      - name: poi_id
+        tests: [unique, not_null]
+  - name: stg_mdm__calendar
+    columns:
+      - name: calendar_date
+        tests: [unique, not_null]
+  - name: stg_mdm__weather
+    columns:
+      - name: observation_id
+        tests: [unique, not_null]
+
+  - name: stg_ops__garages
+    columns:
+      - name: garage_id
+        tests: [unique, not_null]
+  - name: stg_ops__vehicles
+    columns:
+      - name: vehicle_id
+        tests: [unique, not_null]
+      - name: garage_id
+        tests:
+          - relationships: {to: ref('stg_ops__garages'), field: garage_id}
+  - name: stg_ops__drivers
+    columns:
+      - name: driver_id
+        tests: [unique, not_null]
+  - name: stg_ops__leases
+    columns:
+      - name: lease_id
+        tests: [unique, not_null]
+  - name: stg_ops__shifts
+    description: >
+      Shift sign-ons with an effective end resolved once. ~1.5% of shifts never
+      emitted LOGOUT; `is_unclosed_shift` marks where the derived end was
+      substituted so nobody has to guess.
+    columns:
+      - name: shift_id
+        tests: [unique, not_null]
+      - name: shift_start_ts
+        tests: [not_null]
+      - name: effective_end_ts
+        tests: [not_null]
+  - name: stg_ops__trip_assignments
+    columns:
+      - name: assignment_id
+        tests: [unique, not_null]
+      - name: trip_key
+        tests: [not_null]
+      - name: shift_id
+        tests:
+          - relationships: {to: ref('stg_ops__shifts'), field: shift_id}
+  - name: stg_ops__status_events
+    description: >
+      The occupancy stream. `skew_seconds` exposes the gap between assigned
+      and received time; sessionizing on the wrong one produces negative
+      intervals.
+    columns:
+      - name: event_id
+        tests: [unique, not_null]
+      - name: status_code
+        tests:
+          - accepted_values:
+              values: [LOGIN, AVAILABLE, DISPATCHED, ON_TRIP, BREAK, LOGOUT]
+  - name: stg_ops__maintenance
+    columns:
+      - name: maintenance_id
+        tests: [unique, not_null]

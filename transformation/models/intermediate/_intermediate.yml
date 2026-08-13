@@ -1,0 +1,79 @@
+version: 2
+
+models:
+  - name: int_zone_attributes
+    description: >
+      Current-version zone attributes with borough rollup and a point-of-interest
+      summary. The current-version filter is mandatory: zone_master is versioned
+      at source, and without it every trip touching a re-designated zone doubles.
+    columns:
+      - name: location_id
+        tests: [unique, not_null]
+      - name: is_unresolved_zone
+        description: >
+          True for TLC codes 264 and 265. These join the lookup cleanly, which is
+          precisely the hazard -- the failure mode is a meaningless borough, not
+          an unmatched row.
+
+  - name: int_trips_enriched
+    description: >
+      The cross-layer model: conformed silver trips rejoined to the
+      fleet-specific bronze columns ADR 0001 dropped. Both joins are optional
+      many-to-one; multiplication here would be a defect.
+    columns:
+      - name: trip_key
+        description: '{{ doc("trip_key") }}'
+        tests: [unique, not_null]
+      - name: airport_fee_status
+        description: >
+          Distinguishes 'not_applicable' (green, no such column) from 'missing'
+          (yellow, column present but null) from 'present'. Collapsing the first
+          two is how a fleet-blind average goes wrong.
+        tests:
+          - accepted_values: {values: ['present', 'missing', 'not_applicable']}
+
+  - name: int_trip_fare_components
+    description: Fare decomposition with an explicit residual.
+    columns:
+      - name: trip_key
+        tests: [unique, not_null]
+      - name: fare_residual
+        description: '{{ doc("fare_residual") }}'
+      - name: measurable_tip_rate
+        description: '{{ doc("measurable_tip_rate") }}'
+
+  - name: int_trip_quality_flags
+    description: >
+      Every quality verdict for a trip, in one row. Nothing is deleted -- ADR
+      0002 puts the billable rule in gold, and an excluded trip still happened.
+    columns:
+      - name: trip_key
+        tests: [unique, not_null]
+
+  - name: int_status_intervals
+    description: >
+      The status stream sessionized into intervals. Ordered on event_ts, never
+      received_ts. Terminal intervals on unclosed shifts are closed against the
+      shift's effective end rather than left open.
+    columns:
+      - name: interval_id
+        tests: [unique, not_null]
+      - name: interval_seconds
+        description: Floored at zero; `is_negative_interval` records where that floor bit.
+
+  - name: int_shift_occupancy
+    description: '{{ doc("occupancy_rate") }}'
+    columns:
+      - name: shift_id
+        tests: [unique, not_null]
+      - name: online_seconds
+        tests: [not_null]
+
+  - name: int_shift_economics
+    description: >
+      Shift revenue and cost. Lease terms differ by engagement -- owner-operators
+      pay a revenue share, lease drivers a fixed rate -- and blending them
+      without the type is how a fleet misreads its best drivers as its worst.
+    columns:
+      - name: shift_id
+        tests: [unique, not_null]

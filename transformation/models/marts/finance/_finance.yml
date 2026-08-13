@@ -1,0 +1,57 @@
+version: 2
+
+models:
+  - name: mart_daily_zone_revenue
+    description: >
+      Finance's headline table, in the Monday revenue pack. The billable rule
+      (ADR 0002) is applied here and nowhere upstream.
+    columns:
+      - name: trip_date
+        tests: [not_null]
+      - name: total_revenue
+        tests: [not_null]
+      - name: pickup_location_id
+        tests:
+          - relationships: {to: ref('dim_zone'), field: zone_natural_key}
+
+  - name: mart_monthly_service_summary
+    description: Monthly volume and revenue by fleet and payment method.
+    columns:
+      - name: trip_month
+        tests: [not_null]
+      - name: service_type
+        tests:
+          - accepted_values: {values: ['yellow', 'green']}
+
+  - name: mart_revenue_component_bridge
+    description: >
+      The fare-to-total walk, unpivoted one component per row. The residual is
+      its own component rather than being absorbed into a real one: if it is
+      non-zero the walk does not balance, and that is a finding about the source.
+    columns:
+      - name: component_name
+        tests: [not_null]
+
+exposures:
+  - name: monday_revenue_pack
+    type: analysis
+    maturity: high
+    description: >
+      The weekly revenue pack Finance circulates each Monday morning. Any change
+      to the billable rule or the reporting window restates it.
+    depends_on:
+      - ref('mart_daily_zone_revenue')
+      - ref('mart_revenue_component_bridge')
+    owner:
+      name: Finance Reporting
+      email: finance-reporting@harbourpoint.example
+
+  - name: concession_negotiation_pack
+    type: analysis
+    maturity: medium
+    description: Ad-hoc analysis supporting Port Authority concession discussions.
+    depends_on:
+      - ref('mart_monthly_service_summary')
+    owner:
+      name: Commercial
+      email: commercial@harbourpoint.example

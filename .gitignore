@@ -27,3 +27,4 @@ data/
 
 # VD Studio — operator secret store symlink (VD-3409); resolves outside the repo, never commit
 ingestion/.dlt/secrets.toml
+bash_events/
