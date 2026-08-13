@@ -199,3 +199,137 @@
     {{ exceptions.raise_compiler_error("vd_recon_compile_predicate: literal must be a string, number, boolean, or null, got " ~ value) }}
   {% endif %}
 {% endmacro %}
+
+{% macro vd_recon_predicate_columns(predicate, log_result=true) %}
+  {# DC-13's column-containment half needs the column set a typed predicate reads, without
+     compiling it to SQL or validating it against a mapped-columns allowlist — this macro is
+     the read-only counterpart to vd_recon_compile_predicate_node, walking the identical
+     grammar but collecting column names instead of assembling a SQL string. It performs no
+     validation of its own; a malformed node still raises through the same
+     exceptions.raise_compiler_error calls vd_recon_compile_predicate_node uses, since a
+     predicate that cannot be compiled cannot have its columns meaningfully extracted either.
+
+     Returns {"columns": list[str]} — a dict wrapping a sorted, deduplicated column-name list,
+     never a bare list[str] — unwrap with ['columns'] before iterating, exactly as
+     vd_recon_predict and vd_recon_validate_derived_operands both do below.
+
+     `log_result` mirrors vd_recon_compile_predicate's own parameter of the same name and
+     defaults to true for the same reason: a standalone `dbt run-operation` call against this
+     macro still surfaces its result via the VD_RECON_RESULT convention. A caller embedding this
+     macro as an internal step (vd_recon_predict, vd_recon_validate_derived_operands) passes
+     log_result=false so this macro's own result never leaks ahead of that caller's own
+     VD_RECON_RESULT line. #}
+  {% set cols = vd_recon_predicate_columns_node(predicate) %}
+  {% set unique_sorted = cols | unique | sort | list %}
+  {% set result = {"columns": unique_sorted} %}
+  {% if log_result %}
+    {{ log("VD_RECON_RESULT " ~ tojson(result), info=True) }}
+  {% endif %}
+  {{ return(result) }}
+{% endmacro %}
+
+{% macro vd_recon_predicate_columns_node(node) %}
+  {% if node is not mapping or 'op' not in node %}
+    {{ exceptions.raise_compiler_error("vd_recon_predicate_columns: predicate node must be a mapping with an 'op' key, got " ~ node) }}
+  {% endif %}
+  {% set op = node['op'] %}
+  {% set cols = [] %}
+  {% if op in ('and', 'or') %}
+    {% for clause in node['clauses'] %}
+      {% do cols.extend(vd_recon_predicate_columns_node(clause)) %}
+    {% endfor %}
+  {% elif op in ('=', '!=', '<', '<=', '>', '>=') %}
+    {% do cols.extend(vd_recon_operand_columns(node['left'])) %}
+    {% do cols.extend(vd_recon_operand_columns(node['right'])) %}
+  {% elif op == 'between' %}
+    {% do cols.extend(vd_recon_operand_columns(node['operand'])) %}
+    {% do cols.extend(vd_recon_operand_columns(node['low'])) %}
+    {% do cols.extend(vd_recon_operand_columns(node['high'])) %}
+  {% elif op in ('is null', 'is not null') %}
+    {% do cols.extend(vd_recon_operand_columns(node['operand'])) %}
+  {% else %}
+    {{ exceptions.raise_compiler_error("vd_recon_predicate_columns: operator '" ~ op ~ "' is outside the closed operator set") }}
+  {% endif %}
+  {{ return(cols) }}
+{% endmacro %}
+
+{% macro vd_recon_operand_columns(operand) %}
+  {# Mirrors vd_recon_compile_operand/vd_recon_compile_column_expr's traversal, minus the
+     mapped-columns/PII validation those two enforce at compile time — this macro only
+     collects names, so it never needs the allowlist those checks exist to guard. #}
+  {% if operand is not mapping %}
+    {{ exceptions.raise_compiler_error("vd_recon_predicate_columns: operand must be a mapping, got " ~ operand) }}
+  {% endif %}
+  {% if 'literal' in operand %}
+    {{ return([]) }}
+  {% elif 'column' in operand %}
+    {{ return([operand['column']]) }}
+  {% elif 'op' in operand %}
+    {% set cols = [] %}
+    {% do cols.extend(vd_recon_operand_columns(operand['left'])) %}
+    {% do cols.extend(vd_recon_operand_columns(operand['right'])) %}
+    {{ return(cols) }}
+  {% elif 'transform' in operand %}
+    {% set transform = operand['transform'] %}
+    {% if transform == 'coalesce' %}
+      {% set cols = [] %}
+      {% for arg in operand['args'] %}
+        {% do cols.extend(vd_recon_operand_columns(arg)) %}
+      {% endfor %}
+      {{ return(cols) }}
+    {% else %}
+      {{ return(vd_recon_operand_columns(operand['arg'])) }}
+    {% endif %}
+  {% else %}
+    {{ exceptions.raise_compiler_error("vd_recon_predicate_columns: operand must have one of 'column', 'literal', 'op', or 'transform', got " ~ operand) }}
+  {% endif %}
+{% endmacro %}
+
+{% macro vd_recon_validate_derived_operands(claim_predicate, baseline_columns, target_columns, source_relations=[]) %}
+  {# DC-22 (VD-4316) plus DC-31/DC-32 (VD-4338): a derived_expression claim's operands must be
+     recorded before the hypothesis is formed — in baseline_columns/target_columns, or, for a
+     source-only operand, in the source_relations entry whose index that operand's own
+     source_<n>_ prefix names. The pre-commitment TIMING rule is unchanged; only which fields
+     it checks against widens (AC-96). An operand naming an index absent from source_relations
+     is rejected exactly like any other unrecorded operand, never silently accepted. A column
+     merely named source_<word> with no matching numeric-index prefix (e.g. an ordinary
+     source_system column that happens to be baseline/target-mapped) must fall through to the
+     baseline_columns/target_columns/all_columns check below, never be misrouted here — DC-30's
+     duplicate-index rejection mirrors Task 3's, for the identical reason. #}
+  {% set operands = vd_recon_predicate_columns(claim_predicate, log_result=false)['columns'] %}
+  {% set all_columns = (baseline_columns + target_columns) | unique | list %}
+  {% set source_columns_by_index = {} %}
+  {% set seen_indexes = [] %}
+  {% for src in source_relations %}
+    {% if src.index in seen_indexes %}
+      {{ exceptions.raise_compiler_error("vd_recon_validate_derived_operands: duplicate index in source_relations: " ~ src.index) }}
+    {% endif %}
+    {% do seen_indexes.append(src.index) %}
+    {% do source_columns_by_index.update({src.index | string: src.columns}) %}
+  {% endfor %}
+  {% set unrecorded = [] %}
+  {% for op_col in operands %}
+    {% set source_match = modules.re.match('^source_([0-9]+)_(.+)$', op_col) %}
+    {% if op_col.startswith('baseline_') %}
+      {% set bare = op_col[9:] %}
+      {% if bare not in baseline_columns %}{% do unrecorded.append(op_col) %}{% endif %}
+    {% elif op_col.startswith('target_') %}
+      {% set bare = op_col[7:] %}
+      {% if bare not in target_columns %}{% do unrecorded.append(op_col) %}{% endif %}
+    {% elif source_match %}
+      {% set idx = source_match.group(1) %}
+      {% set bare = source_match.group(2) %}
+      {% if idx not in source_columns_by_index or bare not in source_columns_by_index[idx] %}
+        {% do unrecorded.append(op_col) %}
+      {% endif %}
+    {% elif op_col not in all_columns %}
+      {% do unrecorded.append(op_col) %}
+    {% endif %}
+  {% endfor %}
+  {% if unrecorded | length > 0 %}
+    {{ exceptions.raise_compiler_error("vd_recon_validate_derived_operands: operand(s) not in the recorded column inventory: " ~ unrecorded | join(', ')) }}
+  {% endif %}
+  {% set result = {"valid": true, "columns": operands} %}
+  {{ log("VD_RECON_RESULT " ~ tojson(result), info=True) }}
+  {{ return(result) }}
+{% endmacro %}

@@ -11,4 +11,5 @@
   {% set row = results.rows[0] %}
   {% set result = {"total": row[0], "distinct": row[1], "nulls": row[2]} %}
   {{ log("VD_RECON_RESULT " ~ tojson(result), info=True) }}
+  {{ return(result) }}
 {% endmacro %}
