@@ -25,10 +25,36 @@
 | pickup_borough | dim_zone.borough_name (joined via pickup_zone_key) | — (group-by/key) | none | target has no native borough column; resolved through `dim_zone` |
 | trip_cnt | count(*) | row count, via constant `trip_flag=1` summed | none | spot-check match: 2024-01-13/Manhattan baseline=96,332, target rollup=96,332 |
 | gross_revenue | sum(total_amount) | sum | none | spot-check match: 2024-01-13/Manhattan baseline=2,072,505.35, target rollup=2,072,505.35 |
-| fare_gap | fare_residual + congestion_surcharge | sum | `t.fare_residual + coalesce(t.congestion_surcharge, 0)` | **Amendment 3 (re-scoped in):** re-mapped from "no target equivalent" to `fare_residual + congestion_surcharge` after H2 (below) confirmed the relationship. `congestion_surcharge` is nullable (unset before congestion pricing zones/dates) — `coalesce(..., 0)` is required, or the additive NULL silently drops the whole row's `fare_residual` from `SUM()`, not just the surcharge (diagnosed as H1 below). |
+| fare_gap | fare_residual + congestion_surcharge | sum | `t.fare_residual + coalesce(t.congestion_surcharge, 0)` | **Amendment 3 (re-scoped in):** re-mapped from "no target equivalent" to `fare_residual + congestion_surcharge`, per FSA direction this run — see "Mapping derivation" below for how `coalesce(..., 0)` was determined to be part of the correct derivation itself, not an Investigate-stage finding about the data. |
 
 Target's remaining columns (all row-level fare/trip attributes not entering `trip_cnt` or
 `gross_revenue`) have no baseline counterpart at this grain and are out of scope.
+
+### Mapping derivation: `fare_gap` → `fare_residual + coalesce(congestion_surcharge, 0)`
+
+This is Negotiate-stage work (deriving a correct column expression), not an Investigate-stage
+hypothesis about baseline/target data divergence — it does not appear in the Investigation
+section or the outcome JSON's `hypotheses` array below, since no data divergence was ever
+confirmed by it.
+
+- Spot-check on `pickup_date = '2024-05-16'`, `pickup_borough = 'Manhattan'` matched baseline's
+  `fare_gap_sum` (242,445.95) exactly against `sum(fare_residual) + sum(congestion_surcharge)`
+  (-24,163.55 + 266,609.5 = 242,445.95), confirming the candidate expression.
+- A first attempt applying this as a per-row derivation, `fare_residual + congestion_surcharge`,
+  before rolling up, produced 1,133 conflicts including 9 one-sided nulls and diffs up to
+  $63,494.25 — too large and structurally wrong (one-sided nulls) to be measurement noise, so
+  this was treated as a broken comparison, not a divergent-data result, and was not measured
+  or reported as one.
+- Root cause: `congestion_surcharge` is `NULL` for trips outside congestion-pricing zones/dates
+  (e.g. one Staten Island trip on `2024-01-13` with `congestion_surcharge IS NULL`,
+  `fare_residual = 2.5`). SQL's `x + NULL = NULL` means
+  `SUM(fare_residual + congestion_surcharge)` silently drops that row's entire `fare_residual`
+  contribution, not just the missing surcharge, corrupting every grain cell containing at least
+  one such trip.
+- Fix: `fare_residual + coalesce(congestion_surcharge, 0)`. This is the corrected mapping
+  expression recorded in the Column mapping table above, and is what Measurement (below) uses
+  from the first attempt at a genuine comparison — no earlier, structurally-broken comparison
+  is reported as a measurement result.
 
 ### PII
 
@@ -64,12 +90,9 @@ Scope: `trip_day`/`pickup_date` in `[2024-01-01, 2024-07-01)`.
 Baseline and target rollup relations each built from three `vd_recon_compile_rollup_relation`
 calls (one per aggregate: `trip_cnt`, `gross_revenue`, `fare_gap`), joined on the macro's own
 `grain_key`, then compared via `vd_recon_compare_keyed(baseline_relation, target_relation,
-["grain_key"], column_pairs)`. First attempt mapped `fare_gap` naively to bare
-`fare_residual` and found 1,133 conflicts including 9 one-sided nulls (target null,
-baseline non-null); root-caused (H1 below) to `congestion_surcharge` being nullable and used
-additively without `coalesce`, silently dropping matching rows' entire `fare_residual`
-contribution from the `SUM()`. Final mapping is
-`fare_residual + coalesce(congestion_surcharge, 0)`:
+["grain_key"], column_pairs)`, using the confirmed mapping
+(`fare_gap` → `fare_residual + coalesce(congestion_surcharge, 0)`; see "Mapping derivation"
+above for how it was derived):
 
 ```json
 {"row_count": {"baseline": 1444, "target": 1444}, "key_count": {"baseline": 1444, "target": 1444}, "classification": {"matching": 354, "missing_from_target": 0, "additional_in_target": 0, "changed": 1090}, "invalid_key_alignment": 0, "column_conflicts": [{"column": "trip_cnt_sum", "conflict_count": 0, "one_sided_null_count": 0}, {"column": "gross_revenue_sum", "conflict_count": 1008, "one_sided_null_count": 0}, {"column": "fare_gap_sum", "conflict_count": 426, "one_sided_null_count": 0}]}
@@ -83,47 +106,33 @@ missing/additional rows on either side).
 ## Investigation (Round 1)
 
 <details>
-<summary><b>H1 — a naive fare_residual + congestion_surcharge mapping loses rows to NULL propagation</b>: <span class="badge badge-good">confirmed</span></summary>
+<summary><b>H1 — fare_gap_sum conflicts are floating-point summation noise, not a real value difference</b>: <span class="badge badge-good">confirmed</span></summary>
 
-Initial attempt mapped `fare_gap` to bare `fare_residual + congestion_surcharge` and
-produced 1,133 conflicts, 9 with a one-sided null on the target side, and diffs up to
-$63,494.25 — clearly material, not noise.
-
-- Direct inspection: `congestion_surcharge` is `NULL` for trips outside congestion-pricing
-  zones/dates (e.g. `pickup_date = '2024-01-13'`, `pickup_borough = 'Staten Island'`: 1 row,
-  `congestion_surcharge IS NULL`, `fare_residual = 2.5`). In SQL, `x + NULL = NULL`, so
-  `SUM(fare_residual + congestion_surcharge)` drops that row's `fare_residual` from the sum
-  entirely, not just the missing surcharge — corrupting every grain cell containing at least
-  one such trip.
-- Fix: `fare_residual + coalesce(congestion_surcharge, 0)`. Re-running the target rollup with
-  the corrected expression eliminated all 9 one-sided nulls and reduced conflicts from 1,133
-  to 426, with max diff dropping from $266,609.5 to 5.8e-11 — see H2.
+- Macro: `vd_recon_predict`
+- Predicate: `abs(target_fare_gap_sum - baseline_fare_gap_sum) <= 0.01`
+- `prediction_reads_as`: "every row's fare_gap_sum conflict magnitude is within the confirmed $0.01 tolerance, consistent with double-precision floating point error rather than a genuine dollar-level discrepancy"
+- `compiled_query`: `select count(*) as n from nyctaxi.main.vd_recon_mismatch_20240101_6mo_r1_faregap3 where abs(("target_fare_gap_sum" - "baseline_fare_gap_sum")) <= 0.01`
+- Result: `matched_count: 1092` — the full mismatch population (including the 670 rows that were never in `fare_gap_sum` conflict to begin with; the predicate holds trivially there), confirming no row's `fare_gap_sum` diff exceeds tolerance.
+- Corroborating aggregate detail (`vd_recon_aggregate_evidence`, column `abs(baseline_fare_gap_sum - target_fare_gap_sum)`): `{"min": 5.55e-17, "max": 5.82e-11, "avg": 9.38e-13, "n": 422}` over the 422 rows actually in conflict — every difference is many orders of magnitude below one cent, ruling out a genuine value divergence and pointing specifically at floating-point summation order (baseline's per-day pre-aggregation vs. target's 6-month rollup over 20.6M rows) as the mechanism.
 </details>
 
 <details>
-<summary><b>H2 — remaining fare_gap_sum conflicts are floating-point summation noise, not a real value difference</b>: <span class="badge badge-good">confirmed</span></summary>
+<summary><b>H2 — gross_revenue_sum conflicts are floating-point summation noise, not a real value difference</b>: <span class="badge badge-good">confirmed</span></summary>
 
-- Macro: `vd_recon_aggregate_evidence`
-- Column: `abs(baseline_fare_gap_sum - target_fare_gap_sum)`
-- `prediction_reads_as`: "every remaining fare_gap_sum conflict's magnitude is at the scale of double-precision floating point error, not a genuine dollar-level discrepancy"
-- Result: `{"min": 5.55e-17, "max": 5.82e-11, "avg": 9.38e-13, "n": 422}` over all 422 rows with both sides present, after the H1 fix — every difference is many orders of magnitude below one cent.
-- Corroborating: `select count(*) from mismatch where abs(baseline_fare_gap_sum - target_fare_gap_sum) > 0.01` → `0`, confirming zero rows exceed the confirmed $0.01 tolerance.
-</details>
-
-<details>
-<summary><b>H3 — gross_revenue_sum conflicts are floating-point summation noise, not a real value difference</b>: <span class="badge badge-good">confirmed</span></summary>
-
-Same mechanism and evidence as the prior run's H1 (unaffected by the `fare_gap` remapping,
-since `gross_revenue`'s own mapping is unchanged): `{"min": -3.17e-08, "max": 6.15e-08, "avg": 3.24e-09, "n": 1007}` over all 1,007 conflicting rows; `0` rows exceed the $0.01 tolerance.
+- Macro: `vd_recon_predict`
+- Predicate: `abs(target_gross_revenue_sum - baseline_gross_revenue_sum) <= 0.01`
+- `prediction_reads_as`: "every row's gross_revenue_sum conflict magnitude is within the confirmed $0.01 tolerance, consistent with double-precision floating point error rather than a genuine dollar-level discrepancy"
+- `compiled_query`: `select count(*) as n from nyctaxi.main.vd_recon_mismatch_20240101_6mo_r1_faregap3 where abs(("target_gross_revenue_sum" - "baseline_gross_revenue_sum")) <= 0.01`
+- Result: `matched_count: 1092` — the full mismatch population, confirming no row's `gross_revenue_sum` diff exceeds tolerance.
+- Corroborating aggregate detail (`vd_recon_aggregate_evidence`, column `abs(baseline_gross_revenue_sum - target_gross_revenue_sum)`): `{"min": -3.17e-08, "max": 6.15e-08, "avg": 3.24e-09, "n": 1007}` over the 1,007 rows actually in conflict — same floating-point-summation mechanism as H1, unaffected by the `fare_gap` remapping since `gross_revenue`'s own mapping is unchanged.
 </details>
 
 ## Residual / Unexplained
 
-None. All 422 `fare_gap_sum` conflicts (post-H1-fix) are covered by H2, and all 1,007
-`gross_revenue_sum` conflicts are covered by H3 — both fall within the confirmed $0.01
-tolerance, making them immaterial. `trip_cnt_sum` has zero conflicts. No presence-class
-differences (`missing_from_target`/`additional_in_target` are both 0; zero one-sided nulls
-after the H1 fix).
+None. All 422 `fare_gap_sum` conflicts are covered by H1, and all 1,007 `gross_revenue_sum`
+conflicts are covered by H2 — both fall within the confirmed $0.01 tolerance, making them
+immaterial. `trip_cnt_sum` has zero conflicts. No presence-class differences
+(`missing_from_target`/`additional_in_target` are both 0; zero one-sided nulls).
 
 ## Outcome
 
@@ -134,9 +143,8 @@ after the H1 fix).
   "plan_id": "core__fct_trip_baseline_agg-core__fct_trip",
   "run_id": "20240101_6mo_r1_faregap3",
   "hypotheses": [
-    {"id": "H1", "mechanism": "naive fare_residual + congestion_surcharge mapping loses rows to NULL propagation when congestion_surcharge is unset; fixed with coalesce(congestion_surcharge, 0)", "disposition": "confirmed"},
-    {"id": "H2", "mechanism": "post-fix fare_gap_sum conflicts are floating-point SUM(DOUBLE) accumulation-order noise, all within 5.8e-11 magnitude and the confirmed $0.01 tolerance", "disposition": "confirmed"},
-    {"id": "H3", "mechanism": "gross_revenue_sum conflicts are floating-point SUM(DOUBLE) accumulation-order noise, all within 6.15e-08 magnitude and the confirmed $0.01 tolerance", "disposition": "confirmed"}
+    {"id": "H1", "mechanism": "cast", "claim": "fare_gap_sum conflicts are within double-precision SUM(DOUBLE) accumulation-order tolerance, not a genuine value divergence", "disposition": "confirmed"},
+    {"id": "H2", "mechanism": "cast", "claim": "gross_revenue_sum conflicts are within double-precision SUM(DOUBLE) accumulation-order tolerance, not a genuine value divergence", "disposition": "confirmed"}
   ],
   "categorization": {"matching": 354, "missing_from_target": 0, "additional_in_target": 0, "changed": 1090},
   "aggregate_measures": {
