@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "mode": "keyed",
+  "outcome": "divergent-explained",
+  "plan_id": "core__fct_trip_baseline_agg_core__fct_trip",
+  "run_id": null,
+  "halt_code": null,
+  "hypotheses": [
+    {
+      "id": "H1",
+      "mechanism": ["derived_expression"],
+      "claim_predicate": "abs(baseline_gross_revenue - target_gross_revenue) <= 0.01",
+      "prediction_reads_as": "Every gross_revenue conflict is within $0.01 of the baseline value — floating-point (DOUBLE) summation over ~20.67M detail rows accumulates rounding error in a different addition order than the baseline's own aggregation, producing tiny non-associative drift rather than a real data or logic discrepancy.",
+      "compiled_query": "select count(*) as n from \"ephm_duckdb-domain_new-intent-b3485bdc\".\"main\".\"vd_recon_mismatch_grossrev_r1\" where abs((\"baseline_gross_revenue\" - \"target_gross_revenue\")) <= 0.01",
+      "claimed_units": [
+        {"key": "V00000000102008-12-31V0000000009Manhattan", "column": "gross_revenue", "class": "conflict"}
+      ],
+      "disposition": "confirmed",
+      "residual_cause": null,
+      "superseded_by": null,
+      "tests": [
+        {
+          "round": 1,
+          "check_kind": "positive_prediction",
+          "macro": "vd_recon_predict",
+          "prediction": "abs(baseline_gross_revenue - target_gross_revenue) <= 0.01 holds for every conflicting row in the gross_revenue mismatch table",
+          "prediction_reads_as": "All 1,021 gross_revenue conflicts are float rounding noise within a $0.01 tolerance, not a real discrepancy.",
+          "compiled_query": "select count(*) as n from \"ephm_duckdb-domain_new-intent-b3485bdc\".\"main\".\"vd_recon_mismatch_grossrev_r1\" where abs((\"baseline_gross_revenue\" - \"target_gross_revenue\")) <= 0.01",
+          "scope_match": true,
+          "result": "matched_count=1021 (100% of the 1021 conflicting rows); observed |diff| range from prior vd_recon_aggregate_evidence call: min 7.105427357601002E-15, max 5.4016709327697754E-8 — many orders of magnitude below the 0.01 tolerance",
+          "disposition": "confirmed",
+          "args_sha256": "e05b4f1c3f622c9eb0838450a285194c136ac56388d4f3f2afe7e34c7663c627",
+          "matched_count": 1021,
+          "provenance": {
+            "invocation_id": "77661219-8dfd-45e6-88af-ce698931a1e3",
+            "captured_at": "2026-08-24T05:49:14Z",
+            "resolved_macro_path": "/data/default-plugins/vibedata-data-engineering/0.54.0/skills/reconciling-target-against-baseline/assets/vd_recon_macros_package",
+            "args_sha256": "e05b4f1c3f622c9eb0838450a285194c136ac56388d4f3f2afe7e34c7663c627",
+            "hypothesis_id": "H1",
+            "round": 1,
+            "macro": "vd_recon_predict",
+            "result_sha256": "fdb6cce526a05a30aecb60a8c516d3201ad13264e3eda0d29f685a66c47d304b",
+            "compiled_query_sha256": "0bb76131f5e0533975f878524cad159d5f65fb3d2c7fa981e8094eb11aa2f819",
+            "matched_count": 1021,
+            "scope_match": true
+          }
+        }
+      ]
+    }
+  ],
+  "categorization": {"residual": [], "unexplained": []},
+  "aggregate_measures": [
+    {"column": "trip_cnt", "measure": "count", "value": 1457},
+    {"column": "gross_revenue", "measure": "count", "value": 1021},
+    {"column": "abs(baseline_gross_revenue - target_gross_revenue)", "measure": "min", "value": "7.105427357601002E-15"},
+    {"column": "abs(baseline_gross_revenue - target_gross_revenue)", "measure": "max", "value": "5.4016709327697754E-8"}
+  ],
+  "checks_not_performed": [
+    {"check": "fare_gap column comparison", "reason": "FSA-confirmed to leave fare_gap unmapped for this round; target-side derivation unknown, tracked as an open follow-up rather than blocking this report"}
+  ],
+  "mismatch_table_ref": "\"ephm_duckdb-domain_new-intent-b3485bdc\".\"main\".\"vd_recon_mismatch_grossrev_r1\"",
+  "measured_difference_count": 1021,
+  "materiality_summary": {"material_count": 0, "immaterial_count": 1021, "material_confirmed": 0},
+  "rounds_used": 1,
+  "retries_used": 0,
+  "investigation": {"stop_reason": "fully_dispositioned"}
+}
