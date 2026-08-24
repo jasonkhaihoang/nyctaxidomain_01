@@ -6,16 +6,38 @@
     "target_relation": "staging.stg_recon__trip_borough_rollup_inputs"
   },
   "mode": "keyed",
-  "key": ["trip_day", "pickup_borough"],
+  "key": [
+    "trip_day",
+    "pickup_borough"
+  ],
   "column_mapping": [
-    { "baseline_column": "trip_day", "target_column": "trip_day", "cast": null },
-    { "baseline_column": "pickup_borough", "target_column": "pickup_borough", "cast": null },
-    { "baseline_column": "trip_cnt", "target_column": "trip_cnt", "cast": null },
-    { "baseline_column": "gross_revenue", "target_column": "gross_revenue", "cast": null }
+    {
+      "baseline_column": "trip_day",
+      "target_column": "trip_day",
+      "cast": null
+    },
+    {
+      "baseline_column": "pickup_borough",
+      "target_column": "pickup_borough",
+      "cast": null
+    },
+    {
+      "baseline_column": "trip_cnt",
+      "target_column": "trip_cnt",
+      "cast": null
+    },
+    {
+      "baseline_column": "gross_revenue",
+      "target_column": "gross_revenue",
+      "cast": null
+    },
+    {
+      "baseline_column": "fare_gap",
+      "target_column": "fare_gap",
+      "cast": null
+    }
   ],
-  "excluded_columns": [
-    { "side": "baseline", "column": "fare_gap", "reason": "target-side derivation unknown; FSA-confirmed to leave unmapped and investigate separately post-measurement rather than block contract confirmation" }
-  ],
+  "excluded_columns": [],
   "scope": {
     "basis": "whole_dataset"
   },
@@ -23,15 +45,49 @@
   "round_cap": 5,
   "pii_columns": [],
   "tolerances": [
-    { "column": "trip_cnt", "kind": "exact", "threshold": null, "measure_kind": "exact_numeric" },
-    { "column": "gross_revenue", "kind": "fixed", "threshold": 0.01, "measure_kind": "float", "reason": "float (DOUBLE) summation over ~20.67M detail rows is non-associative; an exact tolerance can never be confirmed for a float measure, so a fixed $0.01 tolerance is used instead (FSA-confirmed)" }
+    {
+      "column": "trip_cnt",
+      "kind": "exact",
+      "threshold": null,
+      "measure_kind": "exact_numeric"
+    },
+    {
+      "column": "gross_revenue",
+      "kind": "fixed",
+      "threshold": 0.01,
+      "measure_kind": "float",
+      "reason": "float (DOUBLE) summation over ~20.67M detail rows is non-associative; an exact tolerance can never be confirmed for a float measure, so a fixed $0.01 tolerance is used instead (FSA-confirmed)"
+    },
+    {
+      "column": "fare_gap",
+      "kind": "fixed",
+      "threshold": 0.01,
+      "measure_kind": "float",
+      "reason": "FSA-confirmed fixed $0.01 tolerance, consistent with gross_revenue (opt-0). FSA also confirmed (AskUserQuestion opt-0) to scope fare_gap measurement to the 2024-01-01..2024-06-30 window only, disregarding other periods -- the schema's single top-level scope.basis (whole_dataset, covering trip_cnt/gross_revenue) cannot express a narrower per-column window, so this restriction is recorded here and in the rollup relations' own WHERE clause rather than in scope."
+    }
   ],
   "source_fallback_declaration": {
-    "tables": ["domain.core.fct_trip_baseline_agg", "domain.core.fct_trip"],
+    "tables": [
+      "domain.core.fct_trip_baseline_agg",
+      "domain.core.fct_trip"
+    ],
     "declared_by": "FSA"
   },
-  "baseline_columns": ["trip_day", "pickup_borough", "trip_cnt", "gross_revenue", "fare_gap"],
-  "target_columns": ["trip_key", "trip_day", "pickup_borough", "total_amount", "trip_flag"],
+  "baseline_columns": [
+    "trip_day",
+    "pickup_borough",
+    "trip_cnt",
+    "gross_revenue",
+    "fare_gap"
+  ],
+  "target_columns": [
+    "trip_key",
+    "trip_day",
+    "pickup_borough",
+    "total_amount",
+    "trip_flag",
+    "fare_gap"
+  ],
   "confirmed_at": "2025-06-01T00:00:00Z",
   "confirmed_by": "FSA"
 }
