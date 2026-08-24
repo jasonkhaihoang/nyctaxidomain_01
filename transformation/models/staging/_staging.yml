@@ -122,3 +122,15 @@ models:
     columns:
       - name: maintenance_id
         tests: [unique, not_null]
+
+  - name: stg_recon__trip_borough_rollup_inputs
+    description: >
+      Reconciliation support model only — not a general-purpose mart. Exposes
+      fct_trip at native grain with the TLC-published borough (bronze zone
+      lookup, joined by pickup_location_id) and a literal trip_flag, so the
+      sanctioned vd_recon_compile_rollup_relation macro's SUM-only rollup can
+      produce trip_cnt/gross_revenue against core.fct_trip_baseline_agg's
+      (trip_day, pickup_borough) grain.
+    columns:
+      - name: trip_key
+        tests: [unique, not_null]
