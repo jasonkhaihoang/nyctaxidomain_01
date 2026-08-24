@@ -1,0 +1,202 @@
+{
+  "schema_version": 2,
+  "mode": "keyed",
+  "measured_difference_count": 1098,
+  "outcome": "divergent-explained",
+  "plan_id": "recon_fct_trip_r1",
+  "run_id": "recon_fct_trip_r1",
+  "halt_code": null,
+  "hypotheses": [
+    {
+      "id": "H_001",
+      "mechanism": ["derived_expression"],
+      "claim_predicate": "abs(baseline_fare_gap - target_fare_gap) <= 0.02",
+      "prediction_reads_as": "Baseline's fare_gap equals total_amount minus fare_amount, tip_amount, tolls_amount, extra, mta_tax, and improvement_surcharge (i.e. congestion_surcharge and airport_fee are NOT netted out, unlike the Target's own modeled fare_residual measure) -- for every conflicting row, within a 0.02 float-rounding tolerance.",
+      "compiled_query": "select count(*) as n from \"ephm_duckdb-domain_new-intent-0cad34a0\".\"main\".\"vd_recon_mismatch_recon_fct_trip_r1\" where abs((\"baseline_fare_gap\" - \"target_fare_gap\")) > 0.02",
+      "claimed_units": [],
+      "disposition": "confirmed",
+      "residual_cause": null,
+      "tests": [
+        {
+          "round": 1,
+          "check_kind": "positive_prediction",
+          "macro": "vd_recon_predict",
+          "prediction": "abs(baseline_fare_gap - target_fare_gap) <= 0.02 for every fare_gap conflict row, scoped against the identical claim.",
+          "prediction_reads_as": "Recomputing fare_gap on the Target as total_amount - fare_amount - tip_amount - tolls_amount - extra - mta_tax - improvement_surcharge and comparing to baseline's stored fare_gap matches (is within 0.02 of) 1092 of the 1092 rows where fare_gap participates in a conflict, and the claim is fully contained by this test's population.",
+          "compiled_query": "select count(*) as n from \"ephm_duckdb-domain_new-intent-0cad34a0\".\"main\".\"vd_recon_mismatch_recon_fct_trip_r1\" where abs((\"baseline_fare_gap\" - \"target_fare_gap\")) <= 0.02",
+          "scope_match": true,
+          "result": "matched_count=1092",
+          "disposition": "confirmed",
+          "args_sha256": "be9274a72da4c854f1c46f748cd5a04b7404040eecfdf4404af8b9984a42de7f",
+          "matched_count": 1092,
+          "provenance": {
+            "invocation_id": "1d46dab7-515a-4f1b-bb5b-4afb507d635d",
+            "captured_at": "2026-08-24T01:25:47Z",
+            "resolved_macro_path": "/tmp/vd_recon_macros_pkg",
+            "args_sha256": "be9274a72da4c854f1c46f748cd5a04b7404040eecfdf4404af8b9984a42de7f",
+            "hypothesis_id": "H_001",
+            "round": 1,
+            "macro": "vd_recon_predict",
+            "result_sha256": "1f71e2cf2c1d5e55d8046f9f6513afa94dc2194bcc45a38d4e659361c40c86c9",
+            "compiled_query_sha256": "1f2098af7ddc56703a296315a77d8d231d798b4bcbd6e39e7cc4422b48b744d7",
+            "matched_count": 1092,
+            "scope_match": true
+          }
+        }
+      ],
+      "superseded_by": null
+    },
+    {
+      "id": "H_003",
+      "mechanism": ["derived_expression"],
+      "claim_predicate": "abs(baseline_gross_revenue - target_gross_revenue) <= 0.02",
+      "prediction_reads_as": "Baseline's gross_revenue equals the sum of Target's total_amount at the (trip_day, pickup_borough) grain, within a 0.02 float-rounding tolerance.",
+      "compiled_query": "select count(*) as n from \"ephm_duckdb-domain_new-intent-0cad34a0\".\"main\".\"vd_recon_mismatch_recon_fct_trip_r1\" where abs((\"baseline_gross_revenue\" - \"target_gross_revenue\")) > 0.02",
+      "claimed_units": [],
+      "disposition": "confirmed",
+      "residual_cause": null,
+      "tests": [
+        {
+          "round": 1,
+          "check_kind": "positive_prediction",
+          "macro": "vd_recon_predict",
+          "prediction": "abs(baseline_gross_revenue - target_gross_revenue) <= 0.02 for every gross_revenue conflict row, scoped against the identical claim.",
+          "prediction_reads_as": "Comparing Target's summed total_amount to baseline's stored gross_revenue matches (is within 0.02 of) 1092 of the 1092 rows where gross_revenue participates in a conflict, and the claim is fully contained by this test's population.",
+          "compiled_query": "select count(*) as n from \"ephm_duckdb-domain_new-intent-0cad34a0\".\"main\".\"vd_recon_mismatch_recon_fct_trip_r1\" where abs((\"baseline_gross_revenue\" - \"target_gross_revenue\")) <= 0.02",
+          "scope_match": true,
+          "result": "matched_count=1092",
+          "disposition": "confirmed",
+          "args_sha256": "26d43ffd9fc64e726d1fbe23fbd3eec212423b0d7acd0927a33f700a159da9f9",
+          "matched_count": 1092,
+          "provenance": {
+            "invocation_id": "1ac8507f-8580-464e-9e4b-5f2f0663c673",
+            "captured_at": "2026-08-24T01:26:51Z",
+            "resolved_macro_path": "/tmp/vd_recon_macros_pkg",
+            "args_sha256": "26d43ffd9fc64e726d1fbe23fbd3eec212423b0d7acd0927a33f700a159da9f9",
+            "hypothesis_id": "H_003",
+            "round": 1,
+            "macro": "vd_recon_predict",
+            "result_sha256": "fbe171732984b9ce2bed79ac14f076787c4bcfd2cf225db1c96ab8645218a00b",
+            "compiled_query_sha256": "79f74157796531592dc7fe72a698401567d005deaf4c5b14b48f95b4b0b3019f",
+            "matched_count": 1092,
+            "scope_match": true
+          }
+        }
+      ],
+      "superseded_by": null
+    },
+    {
+      "id": "H_002",
+      "mechanism": ["join"],
+      "claim_predicate": "baseline_trip_day < '2019-01-01'",
+      "prediction_reads_as": "Every key present only on the baseline side (missing_from_target) corresponds to a trip_day before 2019-01-01 -- the earliest valid_from_date in dim_zone -- so the Target's role-playing as-of join to dim_zone (fct_trip.sql's zp/zd joins, valid_from_date/valid_to_date half-open interval) silently drops these trips rather than emitting a null-zone row.",
+      "compiled_query": "select count(*) as n from \"ephm_duckdb-domain_new-intent-0cad34a0\".\"main\".\"vd_recon_mismatch_recon_fct_trip_r1\" where \"baseline_trip_day\" < '2019-01-01'",
+      "claimed_units": [
+        {"key": "presence", "column": null, "class": "missing_from_target"}
+      ],
+      "disposition": "confirmed",
+      "residual_cause": null,
+      "tests": [
+        {
+          "round": 1,
+          "check_kind": "positive_prediction",
+          "macro": "vd_recon_predict",
+          "prediction": "baseline_trip_day < '2019-01-01' matches exactly the 6 missing_from_target keys, scoped against the claim that all missing_from_target keys are so explained.",
+          "prediction_reads_as": "All 6 keys present only in the baseline (missing_from_target) have trip_day before dim_zone's 2019-01-01 validity start, and the claim is fully contained by this test's population.",
+          "compiled_query": "select count(*) as n from \"ephm_duckdb-domain_new-intent-0cad34a0\".\"main\".\"vd_recon_mismatch_recon_fct_trip_r1\" where \"baseline_trip_day\" < '2019-01-01'",
+          "scope_match": true,
+          "result": "matched_count=6",
+          "disposition": "confirmed",
+          "args_sha256": "4bde1f2f9dbd237713889082b410139aefffbdb07b483d67f9abe124077a4cc5",
+          "matched_count": 6,
+          "provenance": {
+            "invocation_id": "e770b615-066d-43c7-b8a3-1dd4cad78a6a",
+            "captured_at": "2026-08-24T01:19:03Z",
+            "resolved_macro_path": "/tmp/vd_recon_macros_pkg",
+            "args_sha256": "4bde1f2f9dbd237713889082b410139aefffbdb07b483d67f9abe124077a4cc5",
+            "hypothesis_id": "H_002",
+            "round": 1,
+            "macro": "vd_recon_predict",
+            "result_sha256": "f8aa24a16ae6ce00d230a2d84d5ebec4cab75e840880cd1baab1a8ed1e31d896",
+            "compiled_query_sha256": "8895b8945d2e7425b5e1d4453c6a6332e28a5a9047fad06a5582369cba0a8d4e",
+            "matched_count": 6,
+            "scope_match": true
+          }
+        },
+        {
+          "round": 1,
+          "check_kind": "eliminative",
+          "macro": "vd_recon_predict",
+          "prediction": "No row with baseline_trip_day < '2019-01-01' is present in the Target (exclusivity direction 1: pre-2019 dates never leak through).",
+          "prediction_reads_as": "Zero rows have both an early trip_day and target_present = true.",
+          "compiled_query": "select count(*) as n from \"ephm_duckdb-domain_new-intent-0cad34a0\".\"main\".\"vd_recon_mismatch_recon_fct_trip_r1\" where (\"baseline_trip_day\" < '2019-01-01' and \"target_present\" = true)",
+          "scope_match": null,
+          "result": "matched_count=0",
+          "disposition": "confirmed",
+          "args_sha256": "401b9393f717dce8394101c5e9eda6a594720077f2b58712dccaae9d5ce85630",
+          "matched_count": 0,
+          "provenance": {
+            "invocation_id": "7f71c585-9f1d-45d5-8511-c92fde4c1178",
+            "captured_at": "2026-08-24T01:20:18Z",
+            "resolved_macro_path": "/tmp/vd_recon_macros_pkg",
+            "args_sha256": "401b9393f717dce8394101c5e9eda6a594720077f2b58712dccaae9d5ce85630",
+            "hypothesis_id": "H_002",
+            "round": 1,
+            "macro": "vd_recon_predict",
+            "result_sha256": "20c35320841b4fae835880ee79390e63aa373aba7916456de1b758a123b2f60e",
+            "compiled_query_sha256": "fa30c33b7a54c74e55f4ad458a5d9165566e63442eec299210b1486b7fc94db2",
+            "matched_count": 0,
+            "scope_match": null
+          }
+        },
+        {
+          "round": 1,
+          "check_kind": "eliminative",
+          "macro": "vd_recon_predict",
+          "prediction": "No missing_from_target row has baseline_trip_day >= '2019-01-01' (exclusivity direction 2: no OTHER cause produces a missing row).",
+          "prediction_reads_as": "Zero rows are missing from Target with a trip_day on or after dim_zone's validity start.",
+          "compiled_query": "select count(*) as n from \"ephm_duckdb-domain_new-intent-0cad34a0\".\"main\".\"vd_recon_mismatch_recon_fct_trip_r1\" where (\"target_present\" = false and \"baseline_trip_day\" >= '2019-01-01')",
+          "scope_match": null,
+          "result": "matched_count=0",
+          "disposition": "confirmed",
+          "args_sha256": "165eb3227199a4e16991e88281d0ee76acfa9a22b1334e4608d7cfbd93098480",
+          "matched_count": 0,
+          "provenance": {
+            "invocation_id": "2be86a68-de3d-4027-8fe1-902d4e0e2cd0",
+            "captured_at": "2026-08-24T01:20:49Z",
+            "resolved_macro_path": "/tmp/vd_recon_macros_pkg",
+            "args_sha256": "165eb3227199a4e16991e88281d0ee76acfa9a22b1334e4608d7cfbd93098480",
+            "hypothesis_id": "H_002",
+            "round": 1,
+            "macro": "vd_recon_predict",
+            "result_sha256": "571ffff8223cefd4acabee2054aec70e62facf4d774ef3f38aef714cc812395c",
+            "compiled_query_sha256": "3ad57145a77fe2ebd4d92ab39fc545a64910cd5ab5b2878ce1e9e7799e4fb55b",
+            "matched_count": 0,
+            "scope_match": null
+          }
+        }
+      ],
+      "superseded_by": null
+    }
+  ],
+  "categorization": {
+    "residual": [],
+    "unexplained": []
+  },
+  "aggregate_measures": [
+    {"column": "trip_cnt", "measure": "count", "value": 1457},
+    {"column": "fare_gap", "measure": "count", "value": 1098}
+  ],
+  "checks_not_performed": [],
+  "mismatch_table_ref": "\"ephm_duckdb-domain_new-intent-0cad34a0\".\"main\".\"vd_recon_mismatch_recon_fct_trip_r1\"",
+  "materiality_summary": {
+    "material_count": 6,
+    "immaterial_count": 1100,
+    "material_confirmed": 6
+  },
+  "rounds_used": 1,
+  "retries_used": 0,
+  "investigation": {
+    "stop_reason": "fully_dispositioned"
+  }
+}

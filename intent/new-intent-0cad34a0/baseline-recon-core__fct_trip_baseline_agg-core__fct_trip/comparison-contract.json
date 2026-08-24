@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "plan_id": "recon_fct_trip_r1",
+  "pair": {
+    "baseline_relation": "domain.core.fct_trip_baseline_agg",
+    "target_relation": "domain.core.fct_trip"
+  },
+  "mode": "keyed",
+  "key": ["grain_key"],
+  "column_mapping": [
+    {
+      "baseline_column": "trip_cnt",
+      "target_column": "trip_cnt",
+      "cast": null
+    },
+    {
+      "baseline_column": "gross_revenue",
+      "target_column": "gross_revenue",
+      "cast": null
+    },
+    {
+      "baseline_column": "fare_gap",
+      "target_column": "fare_gap",
+      "cast": {
+        "expression": "total_amount - fare_amount - tip_amount - tolls_amount - extra - mta_tax - improvement_surcharge",
+        "justification": "fare_gap is an ungrounded derived measure on the baseline (no dbt lineage, plain non-modeled table). FSA confirmed (Q&A round 2, fare_gap_fallback=opt-0) that grounding proceeds against the wider Target column inventory since no manifest expression exists to trace. Diagnostic profiling (aggregate sums by pickup_borough/trip_day, surcharge-component breakdowns) isolated this exact formula as an exact match to baseline's fare_gap for every one of the 1457 baseline rows, distinguishing it from the Target's own pre-existing fare_residual measure (fct_trip.fare_residual / int_trip_fare_components.sql), which nets out congestion_surcharge in addition to the components fare_gap excludes -- baseline's fare_gap does NOT net out congestion_surcharge, so it is a narrower reconstruction than the modeled fare_residual.",
+        "narrowing": false,
+        "narrowing_acknowledged": false
+      }
+    }
+  ],
+  "excluded_columns": [],
+  "scope": {
+    "basis": "overlap_window",
+    "period_column": "trip_day / pickup_datetime",
+    "window": {
+      "start": "2002-12-31",
+      "end": "2026-06-26"
+    }
+  },
+  "baseline_captured_at": null,
+  "gating": "advisory",
+  "round_cap": 5,
+  "pii_columns": [],
+  "tolerances": [
+    {
+      "column": "trip_cnt",
+      "kind": "exact",
+      "threshold": null,
+      "measure_kind": "exact_numeric"
+    },
+    {
+      "column": "gross_revenue",
+      "kind": "fixed",
+      "threshold": 0.02,
+      "measure_kind": "float",
+      "reason": "DOUBLE-typed monetary sum; 0.02 absorbs float aggregation rounding noise observed across all rows."
+    },
+    {
+      "column": "fare_gap",
+      "kind": "fixed",
+      "threshold": 0.02,
+      "measure_kind": "float",
+      "reason": "DOUBLE-typed monetary sum; 0.02 absorbs float aggregation rounding noise observed across all rows (baseline values include float artifacts as small as 1e-14)."
+    }
+  ],
+  "baseline_columns": ["trip_day", "pickup_borough", "trip_cnt", "gross_revenue", "fare_gap"],
+  "target_columns": ["trip_key", "pickup_date_key", "pickup_datetime", "pickup_zone_key", "fare_amount", "tip_amount", "tolls_amount", "extra", "mta_tax", "improvement_surcharge", "congestion_surcharge", "airport_fee", "total_amount", "fare_residual", "total_surcharges"],
+  "derived_column_expressions": {
+    "fare_gap": {
+      "source": "unreadable",
+      "wider_inventory_confirmed_by": "A_001"
+    }
+  },
+  "derived_column_fsa_confirmations": [
+    {
+      "id": "A_001",
+      "column": "fare_gap",
+      "confirmed_at": "2026-08-24T00:00:00Z"
+    }
+  ],
+  "source_fallback_declaration": {
+    "tables": ["domain.core.fct_trip"],
+    "declared_by": "FSA (Q&A round 2, source_premise=opt-0): baseline is a plain non-dbt-modeled snapshot of core.fct_trip aggregated to (trip_day, pickup_borough) grain; no dbt lineage exists to trace on the baseline side."
+  },
+  "confirmed_at": "2026-08-24T00:00:00Z",
+  "confirmed_by": "FSA (2 rounds of Q&A, all answered opt-0: fare_gap_def, mode_grain, gating, fare_gap_fallback, source_premise)"
+}
