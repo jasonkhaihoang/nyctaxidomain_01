@@ -1,0 +1,9 @@
+# Durable domain CI configuration — seeded by Vibe Data Studio.
+# The VD_DOMAIN_* coordinate keys are Studio-owned and CONVERGE on every spawn;
+# the per-platform GHA Variable/Secret name-indirection keys (ADR-0018) are
+# defaulted by Studio while custom owner mappings are preserved (ADR-0019).
+VD_DOMAIN_DATA_PLATFORM: duckdb_local
+VD_DOMAIN_SLUG: duckdb-domain
+VD_DOMAIN_SCHEMA: main
+VD_DOMAIN_DUCKDB_LOCAL_PATH: /Users/jasonkhaihoang/Documents/github/studio/data/duckdb/duckdb-local.duckdb
+VD_DOMAIN_DUCKDB_LOCAL_DATABASE: duckdb-local

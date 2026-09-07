@@ -1,0 +1,10 @@
+# dbt packages seeded by Vibe Data Studio. Yours to edit — packages you add are kept.
+packages:
+  - package: dbt-labs/dbt_utils
+    version: ['>=1.3.0', '<2.0.0']
+  - package: elementary-data/elementary
+    version: ['>=0.15.0', '<1.0.0']
+  - package: metaplane/dbt_expectations
+    version: ['>=0.10.0', '<1.0.0']
+  - package: dbt-labs/dbt_project_evaluator
+    version: ['>=1.0.0', '<2.0.0']
